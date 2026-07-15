@@ -1,0 +1,263 @@
+.account-management-grid {
+  align-items: start;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+}
+
+.organization-invitations-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.organization-invitation-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(320px, 1.28fr);
+}
+
+.organization-code-card,
+.organization-invitation-form {
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+}
+
+.organization-code-card {
+  background: #f8fbff;
+  align-content: start;
+}
+
+.organization-code-card > span,
+.organization-invitation-list > strong {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.organization-code-card > strong {
+  color: #174ea6;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.organization-code-card p,
+.organization-invitation-form p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.organization-invitation-form {
+  background: #ffffff;
+}
+
+.organization-invitation-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.invitation-form-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.invitation-form-heading svg {
+  color: #2563eb;
+}
+
+.organization-invitation-list {
+  border-top: 1px solid #edf1f5;
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+}
+
+.organization-invitation-list > span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.organization-invitation-row {
+  align-items: center;
+  background: #f8fafc;
+  display: grid;
+  font-size: 13px;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 120px 100px;
+  padding: 10px 12px;
+}
+
+.organization-invitation-row-heading {
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  padding-bottom: 0;
+}
+
+.organization-invitation-row span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-row-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.organization-invitation-inbox {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+}
+
+.organization-invitation-received {
+  align-items: center;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.organization-invitation-received > div {
+  display: grid;
+  gap: 4px;
+}
+
+.organization-invitation-received span,
+.organization-invitation-received small {
+  color: #64748b;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .organization-invitation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .organization-invitation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .organization-invitation-received {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.account-management-grid > * {
+  min-width: 0;
+}
+
+.account-create-form {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.approval-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.account-list-controls {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 1.6fr) repeat(3, minmax(150px, 1fr));
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.account-list-controls label {
+  color: #475569;
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.account-list-controls select {
+  min-width: 140px;
+  width: 100%;
+}
+
+.account-list-controls .account-search {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.account-search input {
+  width: 100%;
+}
+
+.compact-action {
+  min-height: 34px;
+  padding: 8px 10px;
+}
+
+.danger-action {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.status-pill {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.status-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+@media (max-width: 1100px) {
+  .account-management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-list-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .account-list-controls {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dcvp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-dcvp}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dcvp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dcvp}
+      DISABLE_DATABASE: "0"
+      ALLOW_DEMO_AUTH: "0"
+      REDIS_URL: ${REDIS_URL:-}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+      RESEND_API_KEY: ${RESEND_API_KEY:?set RESEND_API_KEY}
+      RESEND_API_BASE_URL: ${RESEND_API_BASE_URL:-https://api.resend.com}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_API_BASE_URL: ${SENDGRID_API_BASE_URL:-https://api.sendgrid.com/v3}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:?set EMAIL_FROM_ADDRESS}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-DCVP}
+      EMAIL_WEBHOOK_URL: ${EMAIL_WEBHOOK_URL:-}
+      EMAIL_API_KEY: ${EMAIL_API_KEY:-}
+      KYC_SANDBOX_API_BASE_URL: ${KYC_SANDBOX_API_BASE_URL:?set KYC_SANDBOX_API_BASE_URL}
+      KYC_SANDBOX_API_KEY: ${KYC_SANDBOX_API_KEY:?set KYC_SANDBOX_API_KEY}
+      PORT: 4000
+      WEB_ORIGIN: ${WEB_PUBLIC_URL:-${PUBLIC_WEB_BASE_URL:?set WEB_PUBLIC_URL or PUBLIC_WEB_BASE_URL}}
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-${PUBLIC_WEB_BASE_URL:?set WEB_PUBLIC_URL or PUBLIC_WEB_BASE_URL}}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:?set API_PUBLIC_URL or PUBLIC_API_BASE_URL}}
+      PROCTOR_ICE_SERVERS: ${PROCTOR_ICE_SERVERS:-${VITE_PROCTOR_ICE_SERVERS:?set PROCTOR_ICE_SERVERS or VITE_PROCTOR_ICE_SERVERS with STUN/TURN servers}}
+      PUBLIC_WEB_BASE_URL: ${WEB_PUBLIC_URL:-${PUBLIC_WEB_BASE_URL:?set WEB_PUBLIC_URL or PUBLIC_WEB_BASE_URL}}
+      PUBLIC_API_BASE_URL: ${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:?set API_PUBLIC_URL or PUBLIC_API_BASE_URL}}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:?set INITIAL_ADMIN_EMAIL}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?set INITIAL_ADMIN_PASSWORD}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrator}
+      INITIAL_ORGANIZATION_NAME: ${INITIAL_ORGANIZATION_NAME:-Developer Competency Verification}
+    depends_on:
+      - postgres
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:?set API_PUBLIC_URL or PUBLIC_API_BASE_URL}}
+        VITE_PROCTOR_ICE_SERVERS: ${VITE_PROCTOR_ICE_SERVERS:?set VITE_PROCTOR_ICE_SERVERS with STUN/TURN servers}
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      TLS_EMAIL: ${TLS_EMAIL:?set TLS_EMAIL}
+      WEB_DOMAIN: ${WEB_DOMAIN:?set WEB_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

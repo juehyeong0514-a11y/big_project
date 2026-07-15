@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+overrides:
+  dompurify: "^3.4.11"
+onlyBuiltDependencies:
+  - esbuild
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true

@@ -1,0 +1,32 @@
+{
+  "name": "@dcvp/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@dcvp/shared": "workspace:*",
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-query": "^5.83.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.1",
+    "socket.io-client": "^4.8.3",
+    "vite": "^6.4.3"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  ENDED
+  DELETED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionType {
+  CODING
+  MULTIPLE_CHOICE
+  SHORT_ANSWER
+  ESSAY
+}
+
+enum CandidateStatus {
+  INVITED
+  READY
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum UserRole {
+  ADMIN
+  ORGANIZATION
+  PROCTOR
+  CANDIDATE
+}
+
+enum AdminSignupRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OrganizationAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OrganizationInvitationStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+}
+
+enum CodeExecutionStatus {
+  SUCCESS
+  FAILED
+}
+
+enum ProctorEventType {
+  TAB_HIDDEN
+  TAB_VISIBLE
+  WINDOW_BLUR
+  WINDOW_FOCUS
+  COPY
+  PASTE
+  FULLSCREEN_EXIT
+  FULLSCREEN_ENTER
+  PRIMARY_CAMERA_CONNECTED
+  PRIMARY_CAMERA_DISCONNECTED
+  PRIMARY_CAMERA_PERMISSION_DENIED
+  MOBILE_CAMERA_CONNECTED
+  MOBILE_CAMERA_DISCONNECTED
+  MOBILE_CAMERA_PERMISSION_DENIED
+  MOBILE_PAGE_HIDDEN
+  MOBILE_PAGE_VISIBLE
+  MOBILE_PAGE_LEFT
+  MOBILE_NETWORK_OFFLINE
+  MOBILE_NETWORK_ONLINE
+  MOBILE_HEARTBEAT_MISSED
+}
+
+enum IdentityVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum InviteEmailStatus {
+  SENT
+  FAILED
+}
+
+enum ProctorDeviceRole {
+  PRIMARY_PC
+  MOBILE_AUX
+}
+
+enum ProctorDeviceStatus {
+  WAITING
+  CONNECTED
+  DISCONNECTED
+  PERMISSION_DENIED
+}
+
+enum ProctorActionType {
+  WARNING_MESSAGE
+  PAUSE_EXAM
+  RESUME_EXAM
+  TERMINATE_EXAM
+  MEMO
+}
+
+model Organization {
+  id             String   @id
+  name           String
+  joinCode       String   @unique
+  createdAt      DateTime @default(now())
+  users          User[]
+  exams          Exam[]
+  accessRequests OrganizationAccessRequest[]
+  invitations    OrganizationInvitation[]
+}
+
+model OrganizationInvitation {
+  id             String                       @id
+  token          String                       @unique
+  organizationId String
+  invitedUserId  String
+  requestedRole  UserRole
+  status         OrganizationInvitationStatus @default(PENDING)
+  invitedById    String
+  createdAt      DateTime                     @default(now())
+  acceptedAt     DateTime?
+  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([invitedUserId, status])
+}
+
+model User {
+  id             String       @id
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           UserRole
+  organizationId String?
+  createdAt      DateTime     @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  accessRequests OrganizationAccessRequest[]
+
+  @@index([organizationId])
+  @@index([role])
+}
+
+model OrganizationAccessRequest {
+  id               String                          @id
+  userId           String
+  organizationId   String
+  requestedRole    UserRole
+  reason           String
+  status           OrganizationAccessRequestStatus @default(PENDING)
+  rejectionReason  String?
+  reviewedById     String?
+  createdAt        DateTime                        @default(now())
+  reviewedAt       DateTime?
+  user             User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
+}
+
+model AdminSignupRequest {
+  id               String                   @id
+  organizationName String
+  name             String
+  email            String
+  passwordHash     String
+  reason           String
+  requestedRole    UserRole                 @default(ORGANIZATION)
+  status           AdminSignupRequestStatus @default(PENDING)
+  rejectionReason  String?
+  reviewedById     String?
+  approvedUserId   String?
+  createdAt        DateTime                 @default(now())
+  reviewedAt       DateTime?
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model Exam {
+  id                          String       @id
+  organizationId              String
+  title                       String
+  description                 String
+  startAt                     DateTime
+  endAt                       DateTime
+  durationMinutes             Int
+  status                      ExamStatus   @default(DRAFT)
+  languages                   String[]
+  proctoringEnabled           Boolean      @default(false)
+  identityVerificationEnabled Boolean      @default(false)
+  mobileCameraRequired        Boolean      @default(false)
+  screenShareRequired         Boolean      @default(false)
+  createdAt                   DateTime     @default(now())
+  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  questions                   Question[]
+  candidates                  Candidate[]
+  submissions                 Submission[]
+  proctorEvents               ProctorEvent[]
+  proctorDevices              ProctorDevice[]
+  proctorActions              ProctorAction[]
+  competencyReports           CompetencyReport[]
+  identityVerifications       IdentityVerification[]
+  environmentChecks           EnvironmentCheck[]
+  examSessions                ExamSession[]
+  codeDrafts                  CodeDraft[]
+  inviteEmailLogs             InviteEmailLog[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Question {
+  id            String     @id
+  examId        String
+  title         String
+  description   String
+  type          QuestionType @default(CODING)
+  points        Int          @default(100)
+  difficulty    Difficulty
+  timeLimitMs   Int
+  memoryLimitMb Int
+  choices       String[]     @default([])
+  expectedAnswer String?
+  createdAt     DateTime   @default(now())
+  exam          Exam       @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submissions   Submission[]
+  executions    CodeExecution[]
+  testCases     TestCase[]
+  codeDrafts    CodeDraft[]
+
+  @@index([examId])
+}
+
+model TestCase {
+  id             String   @id
+  questionId     String
+  input          String
+  expectedOutput String
+  isPublic       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([isPublic])
+}
+
+model Candidate {
+  id          String          @id
+  examId      String
+  name        String
+  email       String
+  status      CandidateStatus @default(INVITED)
+  inviteToken String          @unique
+  createdAt   DateTime        @default(now())
+  exam        Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+  executions  CodeExecution[]
+  proctorEvents ProctorEvent[]
+  proctorDevices ProctorDevice[]
+  proctorActions ProctorAction[]
+  competencyReports CompetencyReport[]
+  identityVerifications IdentityVerification[]
+  environmentChecks EnvironmentCheck[]
+  examSessions ExamSession[]
+  codeDrafts CodeDraft[]
+  inviteEmailLogs InviteEmailLog[]
+
+  @@index([examId])
+  @@index([email])
+}
+
+model ExamSession {
+  id          String    @id
+  candidateId String
+  examId      String
+  startedAt   DateTime  @default(now())
+  endsAt      DateTime
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, examId])
+  @@index([candidateId])
+  @@index([examId])
+  @@index([endsAt])
+}
+
+model CodeDraft {
+  id          String    @id
+  candidateId String
+  examId      String
+  questionId  String
+  language    String
+  code        String
+  savedAt     DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, questionId, language])
+  @@index([candidateId])
+  @@index([examId])
+  @@index([questionId])
+  @@index([savedAt])
+}
+
+model InviteEmailLog {
+  id                String            @id
+  candidateId       String
+  examId            String
+  email             String
+  inviteUrl         String
+  provider          String
+  providerMessageId String?
+  status            InviteEmailStatus
+  message           String
+  sentAt            DateTime?
+  createdAt         DateTime          @default(now())
+  candidate         Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam              Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([examId])
+  @@index([providerMessageId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ProctorEvent {
+  id          String           @id
+  candidateId String
+  examId      String
+  type        ProctorEventType
+  detail      String?
+  createdAt   DateTime         @default(now())
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam        Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([examId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model ProctorDevice {
+  id            String              @id
+  candidateId   String
+  examId        String
+  role          ProctorDeviceRole
+  status        ProctorDeviceStatus @default(WAITING)
+  connectedAt   DateTime?
+  disconnectedAt DateTime?
+  lastHeartbeatAt DateTime?
+  detail        String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  candidate     Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam          Exam                @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, examId, role])
+  @@index([candidateId])
+  @@index([examId])
+  @@index([role])
+  @@index([status])
+  @@index([lastHeartbeatAt])
+}
+
+model ProctorAction {
+  id          String            @id
+  candidateId String
+  examId      String
+  type        ProctorActionType
+  message     String
+  createdAt   DateTime          @default(now())
+  candidate   Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam        Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([examId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model IdentityVerification {
+  id                String                     @id
+  candidateId       String
+  examId            String
+  documentImageName String                     @default("document-capture-confirmed")
+  documentCaptureConfirmed Boolean             @default(false)
+  faceImageCaptured Boolean                    @default(false)
+  provider          String                     @default("unknown")
+  providerDecision  String                     @default("REVIEW_REQUIRED")
+  providerReferenceId String                   @default("")
+  failureReason     String?
+  similarityScore   Int
+  documentAuthenticityScore Int                 @default(0)
+  faceMatchScore    Int                        @default(0)
+  livenessScore     Int                        @default(0)
+  ocrNameMatched    Boolean                    @default(false)
+  verificationChecks String[]                  @default([])
+  status            IdentityVerificationStatus
+  verifiedAt        DateTime?
+  createdAt         DateTime                   @default(now())
+  candidate         Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam              Exam                       @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([examId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model EnvironmentCheck {
+  id             String    @id
+  candidateId    String
+  examId         String
+  results        Json
+  requiredPassed Boolean
+  createdAt      DateTime  @default(now())
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  exam           Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([examId])
+  @@index([requiredPassed])
+  @@index([createdAt])
+}
+
+model Submission {
+  id          String    @id
+  examId      String
+  candidateId String
+  questionId  String
+  language    String
+  code        String
+  score       Int       @default(0)
+  passedTests Int       @default(0)
+  totalTests  Int       @default(0)
+  submittedAt DateTime  @default(now())
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  testResults JudgeTestResult[]
+
+  @@index([examId])
+  @@index([candidateId])
+  @@index([questionId])
+  @@index([submittedAt])
+}
+
+model CodeExecution {
+  id              String              @id
+  candidateId     String
+  questionId      String
+  language        String
+  code            String
+  status          CodeExecutionStatus
+  output          String
+  error           String?
+  executionTimeMs Int
+  memoryUsageMb   Int
+  passedTests      Int                 @default(0)
+  totalTests       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  candidate       Candidate           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  question        Question            @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  testResults     JudgeTestResult[]
+
+  @@index([candidateId])
+  @@index([questionId])
+  @@index([createdAt])
+}
+
+model JudgeTestResult {
+  id              String         @id
+  codeExecutionId String?
+  submissionId    String?
+  testIndex       Int
+  input           String
+  expectedOutput  String
+  actualOutput    String
+  passed          Boolean
+  error           String?
+  executionTimeMs Int
+  isPublic        Boolean
+  createdAt       DateTime       @default(now())
+  codeExecution   CodeExecution? @relation(fields: [codeExecutionId], references: [id], onDelete: Cascade)
+  submission      Submission?    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([codeExecutionId])
+  @@index([submissionId])
+  @@index([passed])
+}
+
+model CompetencyReport {
+  id                   String    @id
+  examSessionId        String
+  examId               String
+  candidateId          String
+  problemSolvingScore  Int
+  implementationScore  Int
+  debuggingScore       Int
+  codeQualityScore     Int
+  timeManagementScore  Int
+  integrityScore       Int
+  overallScore         Int
+  aiSummary            String
+  strengths            String[]  @default([])
+  improvementAreas     String[]  @default([])
+  recommendations      String[]  @default([])
+  createdAt            DateTime  @default(now())
+  exam                 Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  candidate            Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([examId])
+  @@index([candidateId])
+  @@index([createdAt])
+}

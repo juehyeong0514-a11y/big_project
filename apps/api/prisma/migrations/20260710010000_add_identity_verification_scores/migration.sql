@@ -1,0 +1,6 @@
+ALTER TABLE "IdentityVerification"
+ADD COLUMN "documentAuthenticityScore" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "faceMatchScore" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "livenessScore" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "ocrNameMatched" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "verificationChecks" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
