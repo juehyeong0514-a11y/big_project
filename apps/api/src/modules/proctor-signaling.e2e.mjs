@@ -47,7 +47,7 @@ async function login() {
   const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email: "admin@acme.test", password: "demo1234" })
+    body: JSON.stringify({ email: "admin@acme.test", password: "@A1234567890" })
   });
   assert.equal(response.ok, true);
   const body = await response.json();

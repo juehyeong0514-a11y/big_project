@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { BadRequestException } from "@nestjs/common";
 import { verifyCandidateIdentityInStore } from "../../dist/services/platform-store.identity-environment.js";
 
 const invite = {
-  candidate: { id: "candidate_001", name: "Kim Minjun" },
+  candidate: { id: "candidate_001", name: "Kim Minjun", identityPrivacyConsentVersion: "2026-07-18", identityPrivacyConsentAcceptedAt: "2026-07-18T00:00:00.000Z" },
   exam: { id: "exam_backend_001", identityVerificationEnabled: true }
 };
 const requiredChecks = ["DOCUMENT_AUTHENTICITY", "FACE_MATCH", "LIVENESS", "OCR_NAME_MATCH"];
@@ -33,6 +34,16 @@ const context = {
   }
 };
 
+await assert.rejects(
+  () => verifyCandidateIdentityInStore({
+    context,
+    invite: { ...invite, candidate: { id: "candidate_without_consent", name: "No Consent" } },
+    input: baseInput,
+    memoryVerifications: []
+  }),
+  (error) => error instanceof BadRequestException && error.message.includes("개인정보 처리방침")
+);
+
 const result = await verifyCandidateIdentityInStore({
   context,
   invite,
@@ -44,6 +55,8 @@ assert.equal(result.verification.status, "VERIFIED");
 assert.equal(result.verification.failureReason, undefined);
 assert.equal(result.verification.providerDecision, "VERIFIED");
 assert.equal(result.verification.documentImageName, "document-capture-confirmed");
+assert.equal(result.verification.privacyConsentVersion, "2026-07-18");
+assert.equal(result.verification.privacyConsentAcceptedAt, "2026-07-18T00:00:00.000Z");
 
 const lowScoreContext = {
   prisma: {},
@@ -152,7 +165,7 @@ const emptyChecksResult = await verifyCandidateIdentityInStore({
   memoryVerifications: []
 });
 
-assert.equal(emptyChecksResult.verification.status, "VERIFIED");
+assert.equal(emptyChecksResult.verification.status, "FAILED");
 assert.deepEqual(emptyChecksResult.verification.verificationChecks, []);
 
 await assert.rejects(

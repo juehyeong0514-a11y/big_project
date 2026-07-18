@@ -78,10 +78,10 @@ Content-Type: application/json
   "livenessScore": 91,
   "ocrNameMatched": true,
   "verificationChecks": [
-    "신분증 진위 확인 통과",
-    "신분증 OCR 이름 일치",
-    "신분증 얼굴과 실시간 얼굴 매칭 통과",
-    "라이브니스 확인 통과"
+    "DOCUMENT_AUTHENTICITY",
+    "FACE_MATCH",
+    "LIVENESS",
+    "OCR_NAME_MATCH"
   ]
 }
 ```
@@ -95,6 +95,7 @@ The platform marks a candidate as `VERIFIED` only when all conditions pass:
 - `livenessScore >= 80`
 - `ocrNameMatched === true`
 - `providerDecision === VERIFIED`
+- `verificationChecks`에 `DOCUMENT_AUTHENTICITY`, `FACE_MATCH`, `LIVENESS`, `OCR_NAME_MATCH`가 모두 포함됨
 
 Otherwise the identity result is stored as `FAILED`.
 

@@ -17,6 +17,7 @@ export class OperationsReadinessService {
       this.kycCheck(),
       this.publicUrlCheck(),
       this.authCheck(),
+      this.codeRunnerCheck(),
       this.proctorCheck(),
       this.proctorIceCheck()
     ];
@@ -76,6 +77,10 @@ export class OperationsReadinessService {
     if (production && process.env.ALLOW_DEMO_AUTH === "1") {
       return this.check("auth", "관리자 인증", "ACTION_REQUIRED", "운영 환경에서 데모 로그인이 허용되어 있습니다.", "ALLOW_DEMO_AUTH를 제거하고 실제 관리자 계정을 사용하세요.");
     }
+    const evidenceSecret = process.env.ENVIRONMENT_CHECK_SECRET ?? process.env.AUTH_SESSION_SECRET;
+    if (production && (!hasUsableConfigValue(evidenceSecret) || Buffer.byteLength(evidenceSecret ?? "") < 32)) {
+      return this.check("auth", "관리자 인증", "ACTION_REQUIRED", "환경 점검 증빙 서명 비밀값이 없거나 충분히 강하지 않습니다.", "32바이트 이상의 임의 ENVIRONMENT_CHECK_SECRET을 비밀 환경 변수로 설정하세요.");
+    }
     return this.check("auth", "관리자 인증", "READY", production ? "운영 환경에서 데모 로그인 차단 정책이 적용됩니다." : "개발 환경에서는 DB 장애 시 데모 로그인 fallback을 사용할 수 있습니다.", "운영 배포 전 최초 관리자 계정 생성을 확인하세요.");
   }
 
@@ -85,6 +90,13 @@ export class OperationsReadinessService {
       return this.check("proctor", "실시간 감독", "READY", "WebSocket/WebRTC signaling을 위한 public API URL이 실제 HTTPS 기준으로 설정되어 있습니다.", "PC 캠과 모바일 보조캠을 동시에 열어 관리자 감독 화면을 확인하세요.");
     }
     return this.check("proctor", "실시간 감독", "WARNING", "로컬에서는 감독 signaling이 같은 장치 또는 LAN 조건에 의존할 수 있습니다.", "운영에서는 API_PUBLIC_URL을 실제 HTTPS 도메인으로 설정하세요.");
+  }
+
+  private codeRunnerCheck(): OperationsReadinessCheck {
+    if (process.env.NODE_ENV === "production") {
+      return this.check("code-runner", "코드 실행 격리", "ACTION_REQUIRED", "운영 API 내부의 로컬 Docker 실행은 호스트 보호를 위해 비활성화되어 있습니다.", "네트워크와 권한이 분리된 전용 러너 서비스를 구축하고 작업 큐·동시성·취소 정책을 검증한 뒤 연동하세요.");
+    }
+    return this.check("code-runner", "코드 실행 격리", "WARNING", "개발용 로컬 Docker 러너는 전역 2개 동시 실행, 최대 8개 대기열, 응시자별·IP별 요청 제한을 적용합니다.", "운영에서는 API 프로세스나 Docker 소켓을 직접 노출하지 말고 전용 러너를 사용하세요.");
   }
 
   private proctorIceCheck(): OperationsReadinessCheck {

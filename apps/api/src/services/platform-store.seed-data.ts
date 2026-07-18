@@ -10,6 +10,10 @@ export interface SeedDataState {
 }
 
 export async function ensurePlatformSeedData(prisma: PrismaService, state: SeedDataState) {
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
+
   await prisma.organization.upsert({
     where: { id: state.organization.id },
     update: {},

@@ -25,5 +25,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/apps/api ./apps/api
 
+USER node
+
 EXPOSE 4000
 CMD ["pnpm", "--filter", "@dcvp/api", "start"]

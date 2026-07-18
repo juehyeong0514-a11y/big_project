@@ -5,6 +5,7 @@ import type { CompetencyReport, ExamReport } from "@dcvp/shared";
 import { api } from "./api";
 import { Metric, Status } from "./components";
 import { riskLabel } from "./proctoring";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 
 type CandidateReport = ExamReport["candidates"][number];
 
@@ -94,8 +95,8 @@ function CandidateSignalCard({ item }: { readonly item: CandidateReport }) {
   return (
     <article className="list-item">
       <div>
-        <strong>{item.candidate.name}</strong>
-        <span>{item.candidate.email}</span>
+        <strong>{maskDisplayName(item.candidate.name)}</strong>
+        <span>{maskEmailAddress(item.candidate.email)}</span>
       </div>
       <div className="candidate-report-stats">
         <Status status={item.candidate.status} />

@@ -8,6 +8,7 @@ export class AdminUsersService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async listOrganizationUsers(session: AuthSession): Promise<User[]> {
+    this.assertCanManageAccounts(session);
     if (!this.databaseAvailable()) {
       return [session.user];
     }
@@ -33,6 +34,7 @@ export class AdminUsersService {
   }
 
   async listManagedOrganizations(session: AuthSession): Promise<AdminOrganizationOption[]> {
+    this.assertCanManageAccounts(session);
     if (!this.databaseAvailable()) {
       return [{ id: session.organization.id, name: session.organization.name }];
     }
@@ -185,6 +187,12 @@ export class AdminUsersService {
       return role;
     }
     throw new ForbiddenException("조직 관리자는 자기 조직의 조직 관리자와 감독관 역할만 지정할 수 있습니다.");
+  }
+
+  private assertCanManageAccounts(session: AuthSession) {
+    if (session.user.role !== "ADMIN" && session.user.role !== "ORGANIZATION") {
+      throw new ForbiddenException("운영자 또는 조직 관리자만 계정 정보를 조회할 수 있습니다.");
+    }
   }
 
   private databaseAvailable() {

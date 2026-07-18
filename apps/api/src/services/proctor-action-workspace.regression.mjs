@@ -3,6 +3,23 @@ import { ForbiddenException } from "@nestjs/common";
 import { PlatformStore } from "../../dist/services/platform-store.service.js";
 
 const originalEnv = { ...process.env };
+const adminSession = {
+  token: "session_regression_admin",
+  organization: {
+    id: "org_regression",
+    name: "Regression Organization",
+    joinCode: "ORG-REGRESS",
+    createdAt: new Date().toISOString()
+  },
+  user: {
+    id: "user_regression_admin",
+    email: "admin@example.test",
+    name: "Regression Admin",
+    role: "ADMIN",
+    organizationId: "org_regression",
+    createdAt: new Date().toISOString()
+  }
+};
 
 const fakeCodeRunner = {
   async judge(_language, _code, testCases) {
@@ -43,7 +60,7 @@ try {
     identityVerificationEnabled: false,
     mobileCameraRequired: false,
     screenShareRequired: false
-  });
+  }, adminSession);
   const question = await store.addQuestion(exam.id, {
     title: "Return one",
     description: "Return 1.",
@@ -53,16 +70,16 @@ try {
     timeLimitMs: 1000,
     memoryLimitMb: 128,
     choices: []
-  });
+  }, adminSession);
   await store.addTestCase(question.id, {
     input: "",
     expectedOutput: "1",
     isPublic: true
-  });
+  }, adminSession);
   const candidate = await store.addCandidate(exam.id, {
     name: "Workspace Lock Candidate",
     email: "workspace-lock@example.test"
-  });
+  }, adminSession);
   await store.markCandidateReady(candidate.inviteToken);
   const checkSession = await store.createCandidateEnvironmentCheckSession(candidate.inviteToken);
   await store.saveCandidateEnvironmentCheck(candidate.inviteToken, {
@@ -91,7 +108,7 @@ try {
   await store.createProctorAction(candidate.id, {
     type: "PAUSE_EXAM",
     message: "pause before workspace writes"
-  });
+  }, adminSession);
   await assert.rejects(
     () => store.saveCandidateCodeDraft(candidate.inviteToken, draftInput),
     (error) => error instanceof ForbiddenException && error.message.includes("paused")
@@ -104,7 +121,7 @@ try {
   await store.createProctorAction(candidate.id, {
     type: "RESUME_EXAM",
     message: "resume workspace writes"
-  });
+  }, adminSession);
   const draft = await store.saveCandidateCodeDraft(candidate.inviteToken, draftInput);
   assert.equal(draft.questionId, question.id);
   const execution = await store.runCandidateCode(candidate.inviteToken, draftInput);
@@ -113,7 +130,7 @@ try {
   await store.createProctorAction(candidate.id, {
     type: "TERMINATE_EXAM",
     message: "terminate before submit"
-  });
+  }, adminSession);
   await assert.rejects(
     () => store.submitCandidateCode(candidate.inviteToken, draftInput),
     (error) => error instanceof ForbiddenException && error.message.includes("terminated")

@@ -2,14 +2,22 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Copy, ExternalLink, Send, UserPlus } from "lucide-react";
-import type { CreateCandidateInput } from "@dcvp/shared";
+import type { Candidate, CreateCandidateInput } from "@dcvp/shared";
 import { api } from "./api";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 
 interface InviteEmailNotice {
   readonly delivered: boolean;
   readonly title: string;
   readonly message: string;
 }
+
+const candidateStatusLabels: Record<Candidate["status"], string> = {
+  INVITED: "초대됨",
+  READY: "입장 준비",
+  IN_PROGRESS: "응시 중",
+  COMPLETED: "응시 완료"
+};
 
 export function CandidateManager({ examId, candidates, canManage }: { readonly examId: string; readonly candidates: Awaited<ReturnType<typeof api.examDetail>>["candidates"]; readonly canManage: boolean }) {
   const [form, setForm] = useState<CreateCandidateInput>({ name: "", email: "" });
@@ -38,7 +46,7 @@ export function CandidateManager({ examId, candidates, canManage }: { readonly e
       const deliveryState = result.delivered ? "발송 완료" : "발송 실패";
       setInviteEmailNotice({
         delivered: result.delivered,
-        title: `${deliveryState}: ${result.email}`,
+        title: `${deliveryState}: ${maskEmailAddress(result.email)}`,
         message: `${result.provider}${providerMessage} - ${result.message} 초대 링크: ${result.inviteUrl}`
       });
       await queryClient.invalidateQueries({ queryKey: ["exam", examId] });
@@ -70,8 +78,8 @@ export function CandidateManager({ examId, candidates, canManage }: { readonly e
           return (
             <article key={candidate.id} className="list-item candidate-card">
               <div>
-                <strong>{candidate.name}</strong>
-                <span>{candidate.email} / {candidate.status}</span>
+                <strong>{maskDisplayName(candidate.name)}</strong>
+                <span>{maskEmailAddress(candidate.email)} / {candidateStatusLabels[candidate.status]}</span>
                 <code>{invitePath}</code>
               </div>
               <div className="item-actions">

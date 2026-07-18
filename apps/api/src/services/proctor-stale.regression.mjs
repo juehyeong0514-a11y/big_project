@@ -3,6 +3,23 @@ import { setTimeout as delay } from "node:timers/promises";
 import { PlatformStore } from "../../dist/services/platform-store.service.js";
 
 const originalEnv = { ...process.env };
+const adminSession = {
+  token: "session_stale_admin",
+  organization: {
+    id: "org_demo",
+    name: "Acme Engineering Hiring",
+    joinCode: "ORG-ACME01",
+    createdAt: new Date().toISOString()
+  },
+  user: {
+    id: "user_stale_admin",
+    email: "admin@example.test",
+    name: "Stale Regression Admin",
+    role: "ADMIN",
+    organizationId: "org_demo",
+    createdAt: new Date().toISOString()
+  }
+};
 
 try {
   process.env.DISABLE_DATABASE = "1";
@@ -26,7 +43,7 @@ try {
   assert.equal(staleInvite.proctorDevices[0]?.status, "DISCONNECTED");
   assert.equal(staleInvite.proctorDevices[0]?.detail, "heartbeat missed");
 
-  const liveState = await store.getLiveProctorState("exam_backend_001");
+  const liveState = await store.getLiveProctorState("exam_backend_001", adminSession);
   const staleCandidate = liveState.candidates.find((candidate) => candidate.candidate.id === "candidate_001");
   assert.ok(staleCandidate);
   assert.equal(staleCandidate.proctorEvents[0]?.type, "MOBILE_HEARTBEAT_MISSED");

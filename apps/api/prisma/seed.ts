@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { config } from "dotenv";
-import { createPasswordHash } from "../src/services/password-hash.js";
+import { createPasswordHash, isStrongPassword } from "../src/services/password-hash.js";
 
 config({ path: "../../.env" });
 config();
@@ -25,19 +25,23 @@ async function main() {
   await prisma.user.upsert({
     where: { email: admin.email },
     update: {
-      passwordHash: createPasswordHash(admin.password),
       name: admin.name,
-      role: admin.role
+      role: admin.role,
+      organizationId
     },
     create: {
       id: "user_admin_001",
       email: admin.email,
-      passwordHash: createPasswordHash(admin.password),
+      passwordHash: await createPasswordHash(admin.password),
       name: admin.name,
       role: admin.role,
       organizationId
     }
   });
+
+  if (process.env.NODE_ENV === "production") {
+    return;
+  }
 
   await prisma.exam.upsert({
     where: { id: examId },
@@ -92,7 +96,7 @@ main()
     await prisma.$disconnect();
   })
   .catch(async (error) => {
-    console.error(error);
+    console.error(`Database seed failed (${error instanceof Error ? error.name : "unknown error"}); details are suppressed to protect configuration secrets.`);
     await prisma.$disconnect();
     process.exit(1);
   });
@@ -102,10 +106,13 @@ function initialAdminSeed() {
   if (process.env.NODE_ENV === "production" && !password) {
     throw new Error("INITIAL_ADMIN_PASSWORD is required when seeding production.");
   }
+  if (process.env.NODE_ENV === "production" && !isStrongPassword(password)) {
+    throw new Error("INITIAL_ADMIN_PASSWORD must be at least 12 characters and contain three character groups.");
+  }
 
   return {
     email: process.env.INITIAL_ADMIN_EMAIL ?? "admin@acme.test",
-    password: password ?? "demo1234",
+    password: password ?? "@A1234567890",
     name: process.env.INITIAL_ADMIN_NAME ?? "Acme Operator",
     organizationName: process.env.INITIAL_ORGANIZATION_NAME ?? "Acme Engineering Hiring",
     role: "ADMIN" as const

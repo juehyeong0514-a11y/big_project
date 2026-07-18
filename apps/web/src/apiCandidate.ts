@@ -11,6 +11,7 @@ import type {
   EnvironmentCheck,
   EnvironmentCheckSession,
   IdentityProviderSession,
+  IdentityPrivacyConsentInput,
   IdentityVerification,
   ProctorDevice,
   ProctorEvent,
@@ -65,8 +66,9 @@ export const candidateApi = {
       method: "POST",
       body: JSON.stringify(input)
     }),
-  createIdentityProviderSession: (inviteToken: string) =>
+  createIdentityProviderSession: (inviteToken: string, input: IdentityPrivacyConsentInput) =>
     request<IdentityProviderSession>(`/api/exams/invites/${inviteToken}/identity-session`, {
-      method: "POST"
+      method: "POST",
+      body: JSON.stringify(input)
     })
 };

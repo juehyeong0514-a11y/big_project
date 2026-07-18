@@ -98,7 +98,7 @@ try {
     organizationName: "Applicant Company",
     name: "Applicant Admin",
     email: "applicant@example.test",
-    password: "securepass123",
+    password: "SecurePass123!",
     reason: "We need to run developer exams."
   });
 
@@ -111,7 +111,7 @@ try {
         organizationName: "Applicant Company",
         name: "Applicant Admin",
         email: "applicant@example.test",
-        password: "securepass123",
+        password: "SecurePass123!",
         reason: "Duplicate request."
       }),
     (error) => error instanceof ConflictException
@@ -155,7 +155,7 @@ try {
     organizationName: "Rejected Company",
     name: "Rejected Admin",
     email: "rejected@example.test",
-    password: "securepass123",
+    password: "SecurePass123!",
     reason: "Not enough information."
   });
   const rejected = await service.reviewRequest(operatorSession, rejectedRequest.id, {

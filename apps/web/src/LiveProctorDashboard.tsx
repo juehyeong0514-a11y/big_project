@@ -13,6 +13,7 @@ import {
   proctorStreamKey,
   type ProctorSignalPayload
 } from "./proctoring";
+import { sessionTokenStore } from "./sessionTokenStore";
 
 const proctorDeviceRoles = ["PRIMARY_PC", "MOBILE_AUX"] as const satisfies readonly ProctorDeviceRole[];
 type RiskFilter = "ALL" | "WARNING_OR_HIGHER" | "DANGER";
@@ -37,7 +38,7 @@ export function LiveProctorDashboard() {
 
   useEffect(() => {
     if (!examId) return;
-    const socket = io(proctorSocketUrl(), { auth: { token: localStorage.getItem("dcvp_session_token") ?? "" }, transports: ["websocket"] });
+    const socket = io(proctorSocketUrl(), { auth: { token: sessionTokenStore.get() ?? "" }, transports: ["websocket"] });
     socketRef.current = socket;
 
     socket.on("connect", () => {

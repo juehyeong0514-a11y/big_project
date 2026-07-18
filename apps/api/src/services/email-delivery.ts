@@ -1,8 +1,9 @@
-import type { EmailProviderAdapter, SendInviteEmailInput, SendInviteEmailResult } from "./email.types.js";
+import type { EmailProvider, EmailProviderAdapter, SendInviteEmailInput, SendInviteEmailResult } from "./email.types.js";
 import { providerErrorMessage, providerMessageId } from "./email-provider-response.js";
 import { renderInviteEmail } from "./email-template.js";
 import { EmailProviderConfigurationError } from "./email-errors.js";
 import { hasUsableConfigValue } from "./config-values.js";
+import { OutboundRequestSecurityError, readBoundedJson, readBoundedText, secureOutboundFetch } from "./outbound-http-security.js";
 
 const sendGridApiBaseUrl = "https://api.sendgrid.com/v3";
 const resendApiBaseUrl = "https://api.resend.com";
@@ -27,13 +28,12 @@ async function sendWithResend(input: SendInviteEmailInput): Promise<SendInviteEm
   }
 
   const content = renderInviteEmail(input);
-  const response = await fetch(`${process.env.RESEND_API_BASE_URL ?? resendApiBaseUrl}/emails`, {
+  const response = await providerFetch("resend", `${process.env.RESEND_API_BASE_URL ?? resendApiBaseUrl}/emails`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
-    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       from: formatSender(fromEmail),
       to: [input.email],
@@ -46,7 +46,7 @@ async function sendWithResend(input: SendInviteEmailInput): Promise<SendInviteEm
 
   const body = await readProviderResponse(response);
   if (!response.ok) {
-    throw new EmailProviderConfigurationError("resend", `Resend 발송 실패 (${response.status}): ${providerErrorMessage(body)}`);
+    throw new EmailProviderConfigurationError("resend", `Resend 발송 실패 (${response.status}): ${redactSensitiveText(providerErrorMessage(body))}`);
   }
 
   const messageId = providerMessageId(body);
@@ -66,13 +66,12 @@ async function sendWithSendGrid(input: SendInviteEmailInput): Promise<SendInvite
   }
 
   const content = renderInviteEmail(input);
-  const response = await fetch(`${process.env.SENDGRID_API_BASE_URL ?? sendGridApiBaseUrl}/mail/send`, {
+  const response = await providerFetch("sendgrid", `${process.env.SENDGRID_API_BASE_URL ?? sendGridApiBaseUrl}/mail/send`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
-    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       personalizations: [
         {
@@ -99,7 +98,7 @@ async function sendWithSendGrid(input: SendInviteEmailInput): Promise<SendInvite
   });
 
   if (response.status !== 202) {
-    throw new EmailProviderConfigurationError("sendgrid", `SendGrid 발송 실패 (${response.status}): ${await response.text()}`);
+    throw new EmailProviderConfigurationError("sendgrid", `SendGrid 발송 실패 (${response.status}): ${redactSensitiveText(await boundedProviderText("sendgrid", response))}`);
   }
 
   const messageId = response.headers.get("x-message-id");
@@ -117,13 +116,12 @@ async function sendWithWebhook(input: SendInviteEmailInput): Promise<SendInviteE
   }
 
   const content = renderInviteEmail(input);
-  const response = await fetch(process.env.EMAIL_WEBHOOK_URL, {
+  const response = await providerFetch("webhook", process.env.EMAIL_WEBHOOK_URL, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(process.env.EMAIL_API_KEY ? { authorization: `Bearer ${process.env.EMAIL_API_KEY}` } : {})
     },
-    signal: AbortSignal.timeout(15000),
     body: JSON.stringify({
       to: input.email,
       subject: content.subject,
@@ -134,7 +132,7 @@ async function sendWithWebhook(input: SendInviteEmailInput): Promise<SendInviteE
   });
 
   if (!response.ok) {
-    throw new EmailProviderConfigurationError("webhook", `Webhook 발송 실패 (${response.status}): ${await response.text()}`);
+    throw new EmailProviderConfigurationError("webhook", `Webhook 발송 실패 (${response.status}): ${redactSensitiveText(await boundedProviderText("webhook", response))}`);
   }
 
   const messageId = response.headers.get("x-message-id") ?? response.headers.get("x-request-id");
@@ -167,21 +165,50 @@ async function readProviderResponse(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     try {
-      return await response.json();
+      return await readBoundedJson(response);
     } catch (error) {
-      if (error instanceof Error) {
+      if (error instanceof OutboundRequestSecurityError) {
         return { message: "Provider returned invalid JSON." };
       }
       throw error;
     }
   }
 
-  const text = await response.text();
+  const text = await boundedProviderText("resend", response);
   return { message: redactSensitiveText(text) };
 }
 
+async function providerFetch(provider: EmailProvider, url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await secureOutboundFetch(url, init, 15_000);
+  } catch (error) {
+    if (error instanceof OutboundRequestSecurityError) {
+      throw new EmailProviderConfigurationError(provider, `${provider} 외부 연결 설정이 안전하지 않거나 응답하지 않습니다.`);
+    }
+    throw error;
+  }
+}
+
+async function boundedProviderText(provider: EmailProvider, response: Response): Promise<string> {
+  try {
+    return await readBoundedText(response);
+  } catch (error) {
+    if (error instanceof OutboundRequestSecurityError) {
+      throw new EmailProviderConfigurationError(provider, `${provider} 응답 크기가 허용 범위를 초과했습니다.`);
+    }
+    throw error;
+  }
+}
+
 function redactSensitiveText(value: string) {
-  return value.replace(/re_[A-Za-z0-9_]+/g, "[REDACTED_RESEND_API_KEY]").slice(0, 500);
+  let redacted = value
+    .replace(/re_[A-Za-z0-9_]+/gu, "[REDACTED_API_KEY]")
+    .replace(/SG\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gu, "[REDACTED_API_KEY]")
+    .replace(/sk-[A-Za-z0-9_-]+/gu, "[REDACTED_API_KEY]");
+  for (const secret of [process.env.RESEND_API_KEY, process.env.SENDGRID_API_KEY, process.env.EMAIL_API_KEY]) {
+    if (secret?.trim()) redacted = redacted.replaceAll(secret.trim(), "[REDACTED_API_KEY]");
+  }
+  return redacted.slice(0, 500);
 }
 
 function emailTagValue(value: string) {

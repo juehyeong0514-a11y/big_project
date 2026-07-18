@@ -4,6 +4,7 @@ import type { ProctorDeviceRole } from "@dcvp/shared";
 import type { Server, Socket } from "socket.io";
 import { AuthService } from "../services/auth.service.js";
 import { PlatformStore } from "../services/platform-store.service.js";
+import { isAllowedWebOrigin } from "../services/web-origin-policy.js";
 
 type ProctorSocketRole = "ADMIN" | "CANDIDATE";
 
@@ -29,6 +30,7 @@ interface SignalPayload {
 
 interface ProctorSocketData {
   role?: ProctorSocketRole;
+  adminToken?: string;
   examId?: string;
   candidateId?: string;
   inviteToken?: string;
@@ -67,30 +69,37 @@ const adminRoom = (examId: string) => `exam:${examId}:admins`;
 const candidateRoom = (examId: string, candidateId: string, deviceRole: ProctorDeviceRole) =>
   `exam:${examId}:candidate:${candidateId}:${deviceRole}`;
 const proctorDeviceRoles = ["PRIMARY_PC", "MOBILE_AUX"] as const satisfies readonly ProctorDeviceRole[];
+const socketOrigin = (origin: string | undefined, callback: (error: Error | null, allowed?: boolean) => void) => callback(null, isAllowedWebOrigin(origin));
 
 @WebSocketGateway({
   namespace: "/proctor",
   cors: {
-    origin: true,
-    credentials: true
+    origin: socketOrigin,
+    credentials: false
   }
 })
 export class ProctorGateway implements OnGatewayDisconnect {
   @WebSocketServer()
   private server?: ProctorServer;
+  private readonly adminClientsByToken = new Map<string, Set<ProctorSocket>>();
 
   constructor(
     @Inject(PlatformStore) private readonly store: PlatformStore,
     @Inject(AuthService) private readonly auth: AuthService
-  ) {}
+  ) {
+    this.auth.onSessionRevoked((session) => this.disconnectAdminClients(session.token));
+  }
 
   @SubscribeMessage("join-admin")
   async handleJoinAdmin(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: JoinAdminPayload) {
     const session = await this.authenticateAdmin(client, payload);
-    await this.store.getExamDetail(payload.examId, session);
+    await this.store.getLiveProctorState(payload.examId, session);
 
+    this.untrackAdminClient(client);
     client.data.role = "ADMIN";
+    client.data.adminToken = this.extractAdminToken(client, payload);
     client.data.examId = payload.examId;
+    this.trackAdminClient(client);
     void client.join(adminRoom(payload.examId));
     client.emit("joined-admin", { examId: payload.examId });
   }
@@ -113,31 +122,32 @@ export class ProctorGateway implements OnGatewayDisconnect {
   }
 
   @SubscribeMessage("webrtc-offer")
-  handleOffer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
-    this.assertCanRelay(client, payload);
+  async handleOffer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
+    await this.assertCanRelay(client, payload);
     this.server?.to(adminRoom(payload.examId)).emit("webrtc-offer", { ...payload, socketId: client.id });
   }
 
   @SubscribeMessage("request-offer")
-  handleRequestOffer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
-    this.assertCanRelay(client, payload);
+  async handleRequestOffer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
+    await this.assertCanRelay(client, payload);
     this.server?.to(candidateRoom(payload.examId, payload.candidateId, payload.deviceRole)).emit("request-offer", payload);
   }
 
   @SubscribeMessage("webrtc-answer")
-  handleAnswer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
-    this.assertCanRelay(client, payload);
+  async handleAnswer(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
+    await this.assertCanRelay(client, payload);
     this.server?.to(candidateRoom(payload.examId, payload.candidateId, payload.deviceRole)).emit("webrtc-answer", payload);
   }
 
   @SubscribeMessage("ice-candidate")
-  handleIceCandidate(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
-    this.assertCanRelay(client, payload);
+  async handleIceCandidate(@ConnectedSocket() client: ProctorSocket, @MessageBody() payload: SignalPayload) {
+    await this.assertCanRelay(client, payload);
     const room = client.data.role === "ADMIN" ? candidateRoom(payload.examId, payload.candidateId, payload.deviceRole) : adminRoom(payload.examId);
     this.server?.to(room).emit("ice-candidate", payload);
   }
 
   async handleDisconnect(client: ProctorSocket) {
+    this.untrackAdminClient(client);
     if (client.data.role !== "CANDIDATE" || !client.data.examId || !client.data.candidateId || !client.data.inviteToken || !client.data.deviceRole) {
       return;
     }
@@ -160,7 +170,7 @@ export class ProctorGateway implements OnGatewayDisconnect {
   private async authenticateAdmin(client: ProctorSocket, payload: JoinAdminPayload) {
     const token = this.extractAdminToken(client, payload);
     try {
-      return await this.auth.me(token);
+      return await this.auth.requireActiveSession(token);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         this.reject(client, error.message);
@@ -189,8 +199,9 @@ export class ProctorGateway implements OnGatewayDisconnect {
     }
   }
 
-  private assertCanRelay(client: ProctorSocket, payload: SignalPayload) {
+  private async assertCanRelay(client: ProctorSocket, payload: SignalPayload) {
     if (client.data.role === "ADMIN" && client.data.examId === payload.examId) {
+      await this.assertCurrentAdminSession(client);
       return;
     }
 
@@ -204,6 +215,53 @@ export class ProctorGateway implements OnGatewayDisconnect {
     }
 
     this.reject(client, "Proctor signaling is outside the joined room scope.");
+  }
+
+  private async assertCurrentAdminSession(client: ProctorSocket) {
+    try {
+      await this.auth.requireActiveSession(client.data.adminToken);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        this.reject(client, error.message);
+      }
+      throw error;
+    }
+  }
+
+  private trackAdminClient(client: ProctorSocket) {
+    const token = client.data.adminToken;
+    if (!token) {
+      return;
+    }
+    const clients = this.adminClientsByToken.get(token) ?? new Set<ProctorSocket>();
+    clients.add(client);
+    this.adminClientsByToken.set(token, clients);
+  }
+
+  private untrackAdminClient(client: ProctorSocket) {
+    const token = client.data.adminToken;
+    if (!token) {
+      return;
+    }
+    const clients = this.adminClientsByToken.get(token);
+    if (!clients) {
+      return;
+    }
+    clients.delete(client);
+    if (clients.size === 0) {
+      this.adminClientsByToken.delete(token);
+    }
+  }
+
+  private disconnectAdminClients(token: string) {
+    const clients = this.adminClientsByToken.get(token);
+    if (!clients) {
+      return;
+    }
+    this.adminClientsByToken.delete(token);
+    for (const client of clients) {
+      client.disconnect(true);
+    }
   }
 
   private reject(client: ProctorSocket, message: string): never {

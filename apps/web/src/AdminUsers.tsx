@@ -5,12 +5,19 @@ import type { AdminSignupRequest, AuthSession, OrganizationAccessRequest, Update
 import { api } from "./api";
 import { UsersTable } from "./AdminUsersTable";
 import { OrganizationInvitationsPanel } from "./OrganizationInvitationsPanel";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 import "./AdminUsers.css";
 
 const requestStatusLabels: Record<AdminSignupRequest["status"], string> = {
   PENDING: "승인 대기",
   APPROVED: "승인 완료",
   REJECTED: "거절"
+};
+
+const requestRoleLabels: Record<OrganizationAccessRequest["requestedRole"], string> = {
+  CANDIDATE: "일반 계정",
+  PROCTOR: "감독관",
+  ORGANIZATION: "조직 관리자"
 };
 
 function userEditState(user: User): UpdateAdminUserInput {
@@ -94,7 +101,7 @@ function OrganizationAccessRequestsPanel(props: {
       {props.isLoading ? <div className="ready-banner">조직 요청을 불러오는 중입니다.</div> : null}
       {props.error ? <div className="ready-banner ready-banner-error">{errorMessage(props.error)}</div> : null}
       <div className="table-wrap"><table><thead><tr><th>상태</th><th>조직</th><th>신청자</th><th>요청 권한</th><th>신청 사유</th><th>처리</th></tr></thead><tbody>
-        {props.requests.map((request) => <tr key={request.id}><td><span className={requestStatusClass(request.status)}>{requestStatusLabels[request.status]}</span></td><td>{request.organization.name}<br /><small>{request.organization.joinCode}</small></td><td>{request.user.name}<br /><small>{request.user.email}</small></td><td>{request.requestedRole}</td><td>{request.reason}</td><td>{request.status === "PENDING" ? <div className="approval-actions"><button className="primary-action compact-action" type="button" onClick={() => props.reviewMutation.mutate({ requestId: request.id, action: "APPROVE" })} disabled={props.reviewMutation.isPending}>승인</button><button className="ghost-action compact-action danger-action" type="button" onClick={() => props.reviewMutation.mutate({ requestId: request.id, action: "REJECT" })} disabled={props.reviewMutation.isPending}>거절</button></div> : request.rejectionReason ?? "-"}</td></tr>)}
+        {props.requests.map((request) => <tr key={request.id}><td><span className={requestStatusClass(request.status)}>{requestStatusLabels[request.status]}</span></td><td>{request.organization.name}<br /><small>{request.organization.joinCode}</small></td><td>{maskDisplayName(request.user.name)}<br /><small>{maskEmailAddress(request.user.email)}</small></td><td>{requestRoleLabels[request.requestedRole]}</td><td>{request.reason}</td><td>{request.status === "PENDING" ? <div className="approval-actions"><button className="primary-action compact-action" type="button" onClick={() => props.reviewMutation.mutate({ requestId: request.id, action: "APPROVE" })} disabled={props.reviewMutation.isPending}>승인</button><button className="ghost-action compact-action danger-action" type="button" onClick={() => props.reviewMutation.mutate({ requestId: request.id, action: "REJECT" })} disabled={props.reviewMutation.isPending}>거절</button></div> : request.rejectionReason ?? "-"}</td></tr>)}
         {props.requests.length === 0 ? <tr><td colSpan={6}>조직 참여 또는 권한 요청이 없습니다.</td></tr> : null}
       </tbody></table></div>
     </section>
@@ -120,7 +127,7 @@ function SignupRequestsPanel(props: {
             {props.requests.map((request) => (
               <tr key={request.id}>
                 <td><span className={requestStatusClass(request.status)}>{requestStatusLabels[request.status]}</span></td>
-                <td>{request.organizationName}</td><td>{request.name}</td><td>{request.email}</td><td>{new Date(request.createdAt).toLocaleString("ko-KR")}</td>
+                <td>{request.organizationName}</td><td>{maskDisplayName(request.name)}</td><td>{maskEmailAddress(request.email)}</td><td>{new Date(request.createdAt).toLocaleString("ko-KR")}</td>
                 <td>{request.status === "PENDING" ? <ReviewControls request={request} {...props} /> : request.rejectionReason ?? "-"}</td>
               </tr>
             ))}

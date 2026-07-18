@@ -14,6 +14,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-dcvp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-dcvp}
       DISABLE_DATABASE: "0"
       ALLOW_DEMO_AUTH: "0"
@@ -32,6 +33,8 @@ services:
       KYC_SANDBOX_API_BASE_URL: ${KYC_SANDBOX_API_BASE_URL:?set KYC_SANDBOX_API_BASE_URL}
       KYC_SANDBOX_API_KEY: ${KYC_SANDBOX_API_KEY:?set KYC_SANDBOX_API_KEY}
       PORT: 4000
+      AUTH_HTTPS_TRUST_PROXY: "1"
+      ENVIRONMENT_CHECK_SECRET: ${ENVIRONMENT_CHECK_SECRET:?set ENVIRONMENT_CHECK_SECRET}
       WEB_ORIGIN: ${WEB_PUBLIC_URL:-${PUBLIC_WEB_BASE_URL:?set WEB_PUBLIC_URL or PUBLIC_WEB_BASE_URL}}
       WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-${PUBLIC_WEB_BASE_URL:?set WEB_PUBLIC_URL or PUBLIC_WEB_BASE_URL}}
       API_PUBLIC_URL: ${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:?set API_PUBLIC_URL or PUBLIC_API_BASE_URL}}
@@ -44,8 +47,6 @@ services:
       INITIAL_ORGANIZATION_NAME: ${INITIAL_ORGANIZATION_NAME:-Developer Competency Verification}
     depends_on:
       - postgres
-    ports:
-      - "4000:4000"
     restart: unless-stopped
 
   web:
@@ -55,10 +56,10 @@ services:
       args:
         VITE_API_BASE_URL: ${API_PUBLIC_URL:-${PUBLIC_API_BASE_URL:?set API_PUBLIC_URL or PUBLIC_API_BASE_URL}}
         VITE_PROCTOR_ICE_SERVERS: ${VITE_PROCTOR_ICE_SERVERS:?set VITE_PROCTOR_ICE_SERVERS with STUN/TURN servers}
+        VITE_PRIVACY_OFFICER_NAME: ${VITE_PRIVACY_OFFICER_NAME:?set VITE_PRIVACY_OFFICER_NAME}
+        VITE_PRIVACY_CONTACT_EMAIL: ${VITE_PRIVACY_CONTACT_EMAIL:?set VITE_PRIVACY_CONTACT_EMAIL}
     depends_on:
       - api
-    ports:
-      - "8080:80"
     restart: unless-stopped
 
   caddy:

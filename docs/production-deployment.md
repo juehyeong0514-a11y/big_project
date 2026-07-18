@@ -25,8 +25,13 @@ KYC_SANDBOX_API_BASE_URL=https://sandbox.kyc-provider.example.com
 KYC_SANDBOX_API_KEY=replace-me
 PROCTOR_ICE_SERVERS=[{"urls":"turns:turn.example.com:5349","username":"turn-user","credential":"turn-secret"}]
 VITE_PROCTOR_ICE_SERVERS=[{"urls":"turns:turn.example.com:5349","username":"turn-user","credential":"turn-secret"}]
+VITE_PRIVACY_OFFICER_NAME=Privacy Officer Name
+VITE_PRIVACY_CONTACT_EMAIL=privacy@example.com
 DISABLE_DATABASE=0
 ALLOW_DEMO_AUTH=0
+NODE_ENV=production
+AUTH_HTTPS_TRUST_PROXY=1
+ENVIRONMENT_CHECK_SECRET=replace-with-at-least-32-random-bytes
 INITIAL_ADMIN_EMAIL=admin@example.com
 INITIAL_ADMIN_PASSWORD=replace-me
 INITIAL_ADMIN_NAME=Administrator
@@ -55,6 +60,12 @@ Expected API response:
 ```
 
 If TLS fails, confirm DNS points to this host and ports `80` and `443` are reachable from the public internet so Caddy can complete ACME validation.
+
+## Authentication HTTPS Enforcement
+
+- In production, every `/api/*` request must arrive over TLS. Direct HTTP requests receive `403`.
+- Caddy terminates TLS and supplies `X-Forwarded-Proto: https` to the private API container. `AUTH_HTTPS_TRUST_PROXY=1` is set only in `docker-compose.prod.yml`.
+- The production compose file deliberately does not publish API port `4000` or web port `8080`; access the web and API only through `https://${WEB_DOMAIN}` and `https://${API_DOMAIN}`. Caddy's `80` and `443` ports are the only public entry points. Do not expose API port `4000` or set `AUTH_HTTPS_TRUST_PROXY=1` for a publicly reachable API process, because a direct client could forge forwarding headers.
 
 ## Mobile QR and Live Proctoring
 
@@ -85,5 +96,18 @@ If TLS fails, confirm DNS points to this host and ports `80` and `443` are reach
 - Production must authenticate admins through the database-backed user table.
 - Keep `DISABLE_DATABASE=0` and do not set `ALLOW_DEMO_AUTH=1` in production.
 - The built-in demo account is only for local development and QA when `ALLOW_DEMO_AUTH=1` or the API is not running with `NODE_ENV=production`.
-- `db:seed` creates or updates the initial admin from `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, `INITIAL_ADMIN_NAME`, and `INITIAL_ORGANIZATION_NAME`.
+- `db:seed` creates the initial admin from `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, `INITIAL_ADMIN_NAME`, and `INITIAL_ORGANIZATION_NAME`. Re-running it updates non-secret profile fields but never resets an existing password.
+- Production seeding does not create the demo exam, sample candidate, or predictable `invite_demo_001` link.
 - Admin passwords are stored as salted PBKDF2 hashes. Legacy demo SHA-256 hashes are upgraded after a successful database login.
+- `ENVIRONMENT_CHECK_SECRET` must be a non-placeholder random value of at least 32 bytes. The readiness check rejects missing, weak, or placeholder values.
+
+## Encrypted Storage and Backups
+
+- Place PostgreSQL data and every backup on an encrypted managed database, encrypted block volume, or host disk with encryption at rest enabled. A Docker named volume does not provide application-level encryption by itself.
+
+## 운영 코드 러너 경계
+
+API는 `NODE_ENV=production`일 때 내부 로컬 Docker 코드 러너를 의도적으로 비활성화합니다. 공개 API 컨테이너에 호스트 Docker 소켓을 마운트하면 안 됩니다. 운영 채점을 활성화하기 전에 격리된 작업자 호스트 또는 클러스터에 전용 러너를 배포하고, 인증된 작업 큐, 전역·응시자별 실행 제한, 취소 처리, 네트워크 차단, 읽기 전용 파일시스템, CPU·메모리·PID·시간 제한을 적용해야 합니다. 이 경계가 제공되기 전까지 관리자 운영 준비도는 `조치 필요`로 표시됩니다.
+- Restrict database network access to the API service and administrator maintenance channel. Do not expose PostgreSQL port `5432` publicly.
+- Encrypt backups separately, rotate backup encryption keys, and test restore procedures without copying production personal data into an unprotected development environment.
+- The platform does not store raw ID-card or face images. Verify the contracted KYC provider encrypts biometric media in transit and at rest and has a documented deletion schedule before enabling production KYC.

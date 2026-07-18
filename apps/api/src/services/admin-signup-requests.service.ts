@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import type { AdminSignupRequest, AuthSession, CreateAdminSignupRequestInput, CreateOrganizationSignupRequestInput, ReviewAdminSignupRequestInput, User } from "@dcvp/shared";
 import { PrismaService } from "./prisma.service.js";
-import { createPasswordHash } from "./password-hash.js";
+import { createPasswordHash, isStrongPassword, passwordPolicyMessage } from "./password-hash.js";
 
 @Injectable()
 export class AdminSignupRequestsService {
@@ -26,6 +26,7 @@ export class AdminSignupRequestsService {
       throw new ConflictException("이미 등록되었거나 승인 대기 중인 이메일입니다.");
     }
 
+    const passwordHash = await createPasswordHash(parsed.password);
     const request = await this.runDatabase(() =>
       this.prisma.adminSignupRequest.create({
         data: {
@@ -33,7 +34,7 @@ export class AdminSignupRequestsService {
           organizationName: parsed.organizationName,
           name: parsed.name,
           email: parsed.email,
-          passwordHash: createPasswordHash(parsed.password),
+          passwordHash,
           reason: parsed.reason,
           requestedRole: "ORGANIZATION"
         }
@@ -176,8 +177,8 @@ export class AdminSignupRequestsService {
     const email = input.email.trim().toLowerCase();
     const password = input.password;
     const reason = input.reason.trim();
-    if (!organizationName || !name || !email || !reason || password.length < 10) {
-      throw new BadRequestException("조직명, 이름, 이메일, 신청 사유, 10자 이상의 비밀번호가 필요합니다.");
+    if (!organizationName || !name || !email || !reason || !isStrongPassword(password)) {
+      throw new BadRequestException(`조직명, 이름, 이메일, 신청 사유와 ${passwordPolicyMessage}`);
     }
     if (!email.includes("@")) {
       throw new BadRequestException("올바른 이메일을 입력해주세요.");

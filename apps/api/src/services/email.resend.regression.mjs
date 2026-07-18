@@ -104,6 +104,22 @@ async function expectNonJsonProviderFailureMessage() {
   );
 }
 
+async function expectJsonProviderSecretsAreRedacted() {
+  process.env.EMAIL_PROVIDER = "resend";
+  process.env.RESEND_API_KEY = "re_test_resend_key";
+  process.env.EMAIL_FROM_ADDRESS = "no-reply@example.com";
+  process.env.RESEND_API_BASE_URL = "https://resend.test";
+
+  globalThis.fetch = async () => Response.json({ message: "provider echoed re_test_resend_key" }, { status: 400 });
+
+  await assert.rejects(
+    () => new EmailService().sendInvite(sampleInvite()),
+    (error) => error instanceof EmailProviderConfigurationError
+      && error.message.includes("[REDACTED_API_KEY]")
+      && !error.message.includes("re_test_resend_key")
+  );
+}
+
 function sampleInvite() {
   return {
     candidateId: "candidate_001",
@@ -121,6 +137,7 @@ try {
   await expectResendPayloadAndMessageId();
   await expectResendFailureMessage();
   await expectNonJsonProviderFailureMessage();
+  await expectJsonProviderSecretsAreRedacted();
   console.log("resend email provider regression passed");
 } finally {
   globalThis.fetch = originalFetch;

@@ -28,7 +28,7 @@ try {
 
   const demoService = new AuthService(throwingPrisma);
   const setup = await demoService.setupStatus();
-  const session = await demoService.login({ email: "admin@acme.test", password: "demo1234" });
+  const session = await demoService.login({ email: "admin@acme.test", password: "@A1234567890" });
 
   assert.deepEqual(setup, { enabled: false, reason: "DATABASE_UNAVAILABLE" });
   assert.equal(session.user.email, "admin@acme.test");
@@ -36,10 +36,11 @@ try {
   assert.equal(findUniqueAttempts, 0);
 
   process.env.NODE_ENV = "production";
+  process.env.ALLOW_DEMO_AUTH = "1";
   const productionService = new AuthService(throwingPrisma);
   console.error = () => undefined;
   await assert.rejects(
-    () => productionService.login({ email: "admin@acme.test", password: "demo1234" }),
+    () => productionService.login({ email: "admin@acme.test", password: "@A1234567890" }),
     (error) => error instanceof ServiceUnavailableException
   );
   console.error = originalConsoleError;

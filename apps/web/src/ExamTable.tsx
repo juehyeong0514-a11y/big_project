@@ -21,14 +21,14 @@ export function ExamTable({ exams, canManage = true }: { readonly exams: ExamRow
   };
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap exam-table-wrap">
       <table>
         <thead>
           <tr>
             <th>시험</th>
             <th>상태</th>
             <th>일정</th>
-            <th>시간</th>
+            <th className="table-duration-cell">시간</th>
             <th>언어</th>
             <th />
           </tr>
@@ -36,21 +36,21 @@ export function ExamTable({ exams, canManage = true }: { readonly exams: ExamRow
         <tbody>
           {exams.map((exam) => (
             <tr key={exam.id}>
-              <td>
-                <strong>{exam.title}</strong>
-                <span>{exam.description}</span>
+              <td data-label="시험">
+                <div className="table-primary-content">
+                  <strong>{exam.title}</strong>
+                  <span>{exam.description}</span>
+                </div>
               </td>
-              <td>
+              <td data-label="상태">
                 <Status status={exam.status} />
               </td>
-              <td>{new Date(exam.startAt).toLocaleString()}</td>
-              <td>{exam.durationMinutes}분</td>
-              <td>{exam.languages.join(", ")}</td>
-              <td>
+              <td data-label="일정">{new Date(exam.startAt).toLocaleString()}</td>
+              <td className="table-duration-cell" data-label="시간">{exam.durationMinutes}분</td>
+              <td data-label="언어">{exam.languages.join(", ")}</td>
+              <td className="table-action-cell">
                 <div className="table-actions">
-                  <Link className="secondary-action table-action-button" to={`/exams/${exam.id}`}>
-                    <FileText size={16} />상세 보기
-                  </Link>
+                  {canManage ? <Link className="secondary-action table-action-button" to={`/exams/${exam.id}`}><FileText size={16} />상세 보기</Link> : null}
                   <Link className="secondary-action table-action-button" to={`/exams/${exam.id}/proctor`}>
                     <Video size={16} />실시간 감독
                   </Link>

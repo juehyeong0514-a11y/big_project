@@ -52,6 +52,7 @@ export interface UpdateExamRequest {
 }
 
 export async function listExamsInStore(context: ExamAdminStoreContext, memoryState: ExamAdminMemoryState, session: AuthSession) {
+  assertSessionCanViewExams(session);
   const db = await context.runDatabase(async () => {
     const exams = await context.prisma.exam.findMany({ where: scopedExamWhere(session), orderBy: { createdAt: "desc" } });
     return exams.map((exam) => mapExam(exam));
@@ -61,6 +62,7 @@ export async function listExamsInStore(context: ExamAdminStoreContext, memorySta
 }
 
 export async function getExamDetailInStore(context: ExamAdminStoreContext, examId: string, memoryState: ExamAdminMemoryState, session: AuthSession) {
+  assertSessionCanManageExams(session);
   const db = await context.runDatabase(async () => {
     const exam = await context.prisma.exam.findUnique({
       where: { id: examId },
@@ -222,6 +224,18 @@ export async function deleteExamInStore(request: DeleteExamRequest) {
 export function assertSessionCanManageExams(session: AuthSession) {
   if (session.user.role !== "ADMIN" && session.user.role !== "ORGANIZATION") {
     throw new ForbiddenException("조직 관리자 이상만 시험을 관리할 수 있습니다.");
+  }
+}
+
+export function assertSessionCanViewExams(session: AuthSession) {
+  if (session.user.role !== "ADMIN" && session.user.role !== "ORGANIZATION" && session.user.role !== "PROCTOR") {
+    throw new ForbiddenException("운영자, 조직 관리자 또는 감독관만 시험을 조회할 수 있습니다.");
+  }
+}
+
+export function assertSessionCanProctor(session: AuthSession) {
+  if (session.user.role !== "ADMIN" && session.user.role !== "ORGANIZATION" && session.user.role !== "PROCTOR") {
+    throw new ForbiddenException("감독 권한이 있는 계정만 실시간 감독 정보를 조회할 수 있습니다.");
   }
 }
 

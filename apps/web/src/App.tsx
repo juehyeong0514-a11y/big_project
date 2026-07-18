@@ -8,6 +8,9 @@ import { CandidateEnvironmentCheck } from "./CandidateEnvironmentCheck";
 import { CandidateEntry, CandidateIdentityVerification, CandidateMobileIdentityVerification } from "./CandidateFlow";
 import { CandidateExamWorkspace } from "./CandidateExamWorkspace";
 import { LoginPage } from "./LoginPage";
+import { PasswordChangePage } from "./PasswordChangePage";
+import { PrivacyPolicyPage } from "./PrivacyPolicyPage";
+import { sessionTokenStore } from "./sessionTokenStore";
 
 export function App() {
   const location = useLocation();
@@ -18,19 +21,20 @@ export function App() {
       setCheckingSession(false);
       return;
     }
-    const token = localStorage.getItem("dcvp_session_token");
+    const token = sessionTokenStore.get();
     if (!token) {
       setCheckingSession(false);
       return;
     }
-    api.me(token).then(setSession).catch(() => localStorage.removeItem("dcvp_session_token")).finally(() => setCheckingSession(false));
+    api.me(token).then(setSession).catch(() => sessionTokenStore.remove()).finally(() => setCheckingSession(false));
   }, [location.pathname]);
   const logout = () => {
-    const token = localStorage.getItem("dcvp_session_token");
+    const token = sessionTokenStore.get();
     if (token) void api.logout(token);
-    localStorage.removeItem("dcvp_session_token");
+    sessionTokenStore.remove();
     setSession(null);
   };
+  if (location.pathname === "/privacy") return <PrivacyPolicyPage />;
   if (location.pathname.startsWith("/candidate/")) {
     return (
       <Routes>
@@ -45,6 +49,7 @@ export function App() {
   }
   if (checkingSession) return <main className="login-page">세션을 확인하는 중입니다.</main>;
   if (!session) return <LoginPage onLogin={setSession} />;
+  if (session.passwordChangeRequired) return <PasswordChangePage session={session} onSessionUpdated={setSession} onLogout={logout} />;
   if (location.pathname === "/login") return <Navigate to="/" replace />;
   return <AdminShell session={session} onLogout={logout} onSessionUpdated={setSession} />;
 }

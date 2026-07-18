@@ -121,6 +121,8 @@ export function mapCandidate(candidate: {
     email: string;
     status: Candidate["status"];
     inviteToken: string;
+    identityPrivacyConsentVersion?: string | null;
+    identityPrivacyConsentAcceptedAt?: Date | null;
     createdAt: Date;
   }): Candidate {
     return {
@@ -130,6 +132,8 @@ export function mapCandidate(candidate: {
       email: candidate.email,
       status: candidate.status,
       inviteToken: candidate.inviteToken,
+      identityPrivacyConsentVersion: candidate.identityPrivacyConsentVersion ?? undefined,
+      identityPrivacyConsentAcceptedAt: candidate.identityPrivacyConsentAcceptedAt?.toISOString(),
       createdAt: candidate.createdAt.toISOString()
     };
   }

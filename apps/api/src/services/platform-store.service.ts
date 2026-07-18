@@ -1,6 +1,7 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
-import type { AuthSession, Candidate, CandidateInvite, CandidateWorkspace, CodeDraft, CodeExecution, CodeRunInput, CodeSubmitInput, CompetencyReport, CreateCandidateInput, CreateExamInput, CreateEnvironmentCheckInput, CreateIdentityVerificationInput, CreateProctorActionInput, CreateProctorEventInput, CreateQuestionInput, CreateTestCaseInput, DashboardSummary, EnvironmentCheck, EnvironmentCheckResult, Exam, ExamDetail, ExamReport, GenerateReportInput, IdentityVerification, InviteEmailResult, LiveProctorExamState, ProctorAction, ProctorDevice, ProctorEvent, Question, SaveCodeDraftInput, Submission, TestCase, UpdateExamInput, UpsertProctorDeviceInput } from "@dcvp/shared";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@dcvp/shared";
+import type { AuthSession, Candidate, CandidateInvite, CandidateWorkspace, CodeDraft, CodeExecution, CodeRunInput, CodeSubmitInput, CompetencyReport, CreateCandidateInput, CreateExamInput, CreateEnvironmentCheckInput, CreateIdentityVerificationInput, CreateProctorActionInput, CreateProctorEventInput, CreateQuestionInput, CreateTestCaseInput, DashboardSummary, EnvironmentCheck, EnvironmentCheckResult, Exam, ExamDetail, ExamReport, GenerateReportInput, IdentityPrivacyConsentInput, IdentityVerification, InviteEmailResult, LiveProctorExamState, ProctorAction, ProctorDevice, ProctorEvent, Question, SaveCodeDraftInput, Submission, TestCase, UpdateExamInput, UpsertProctorDeviceInput } from "@dcvp/shared";
 import { PrismaService } from "./prisma.service.js";
 import { CodeRunnerService } from "./code-runner.service.js";
 import { IdentityVerificationService } from "./identity-verification.service.js";
@@ -10,7 +11,7 @@ import { logProctorEventInStore, markStaleProctorDevicesInStore, upsertProctorDe
 import { sendCandidateInviteEmailInStore } from "./platform-store.invite-email.js";
 import { saveCandidateEnvironmentCheckInStore, verifyCandidateIdentityInStore } from "./platform-store.identity-environment.js";
 import { createCandidateIdentitySessionInStore } from "./platform-store.identity-session.js";
-import { createExamInStore, deleteExamInStore, getExamDetailInStore, listExamsInStore, updateExamInStore } from "./platform-store.exam-admin.js";
+import { assertSessionCanManageExams, assertSessionCanProctor, assertSessionCanViewExams, createExamInStore, deleteExamInStore, getExamDetailInStore, listExamsInStore, updateExamInStore } from "./platform-store.exam-admin.js";
 import { addCandidateInStore, addQuestionInStore, addTestCaseInStore } from "./platform-store.exam-content.js";
 import { buildLiveProctorState, getExamReportInStore } from "./platform-store.report.js";
 import { saveCompetencyReportInStore } from "./platform-store.report-save.js";
@@ -35,6 +36,7 @@ export class PlatformStore extends PlatformStoreState {
   }
 
   async getDashboard(session: AuthSession): Promise<DashboardSummary> {
+    assertSessionCanViewExams(session);
     return getDashboardInStore(this.dashboardContext(), { organization: this.organization, exams: this.exams, candidates: this.candidates }, session);
   }
 
@@ -47,6 +49,7 @@ export class PlatformStore extends PlatformStoreState {
   }
 
   async getExamReport(examId: string, session: AuthSession): Promise<ExamReport> {
+    assertSessionCanManageExams(session);
     await this.markStaleProctorDevices(examId);
     return getExamReportInStore({ context: this.reportContext(), examId, memoryState: this.reportMemoryState(), session });
   }
@@ -105,6 +108,15 @@ export class PlatformStore extends PlatformStoreState {
   }
 
   async getCandidateInvite(inviteToken: string): Promise<CandidateInvite> {
+    const invite = await this.getCandidateInviteForInternalUse(inviteToken);
+    return toPublicCandidateInvite(invite);
+  }
+
+  async assertCandidateInviteExists(inviteToken: string): Promise<void> {
+    await this.getCandidateInvite(inviteToken);
+  }
+
+  private async getCandidateInviteForInternalUse(inviteToken: string): Promise<CandidateInvite> {
     const invite = await this.getCandidateInviteSnapshot(inviteToken);
     await this.markStaleProctorDevices(invite.exam.id);
     return this.getCandidateInviteSnapshot(inviteToken);
@@ -141,12 +153,28 @@ export class PlatformStore extends PlatformStoreState {
     return result.verification;
   }
 
-  async createCandidateIdentitySession(inviteToken: string) { const invite = await this.getCandidateInvite(inviteToken); return createCandidateIdentitySessionInStore(this.identityVerification, invite); }
+  async createCandidateIdentitySession(inviteToken: string, input: IdentityPrivacyConsentInput) {
+    assertIdentityPrivacyConsent(input);
+    const invite = await this.getCandidateInvite(inviteToken);
+    const acceptedAt = new Date();
+    const updated = await this.tryDatabase(() => this.prisma.candidate.update({
+      where: { id: invite.candidate.id },
+      data: { identityPrivacyConsentVersion: CURRENT_PRIVACY_POLICY_VERSION, identityPrivacyConsentAcceptedAt: acceptedAt }
+    }));
+    if (!updated) {
+      this.candidates = this.candidates.map((candidate) => candidate.id === invite.candidate.id ? {
+        ...candidate,
+        identityPrivacyConsentVersion: CURRENT_PRIVACY_POLICY_VERSION,
+        identityPrivacyConsentAcceptedAt: acceptedAt.toISOString()
+      } : candidate);
+    }
+    return createCandidateIdentitySessionInStore(this.identityVerification, invite);
+  }
 
   async markCandidateReady(inviteToken: string): Promise<CandidateInvite> {
     const result = await markCandidateReadyInStore({ context: this.candidatePortalContext(), inviteToken, memoryState: this.candidatePortalMemoryState() });
     this.candidates = [...result.candidates];
-    return result.invite;
+    return toPublicCandidateInvite(result.invite);
   }
 
   async getCandidateWorkspace(inviteToken: string): Promise<CandidateWorkspace> {
@@ -187,7 +215,9 @@ export class PlatformStore extends PlatformStoreState {
   }
 
   async getLiveProctorState(examId: string, session: AuthSession): Promise<LiveProctorExamState> {
-    const report = await this.getExamReport(examId, session);
+    assertSessionCanProctor(session);
+    await this.markStaleProctorDevices(examId);
+    const report = await getExamReportInStore({ context: this.reportContext(), examId, memoryState: this.reportMemoryState(), session });
     return buildLiveProctorState(report);
   }
 
@@ -262,10 +292,20 @@ export class PlatformStore extends PlatformStoreState {
   }
 
   private async getInviteForWorkspaceUse(inviteToken: string): Promise<CandidateInvite> {
-    const invite = await this.getCandidateInvite(inviteToken);
+    const invite = await this.getCandidateInviteForInternalUse(inviteToken);
     this.assertCandidateCanUseWorkspace(invite);
     return invite;
   }
 
   private async getCandidateInviteSnapshot(inviteToken: string): Promise<CandidateInvite> { return getCandidateInviteInStore({ context: this.candidatePortalContext(), inviteToken, memoryState: this.candidatePortalMemoryState() }); }
+}
+
+export function toPublicCandidateInvite(invite: CandidateInvite): CandidateInvite {
+  return { ...invite, questions: [] };
+}
+
+export function assertIdentityPrivacyConsent(input: IdentityPrivacyConsentInput | undefined): asserts input is IdentityPrivacyConsentInput {
+  if (input?.privacyConsentAccepted !== true || input.privacyPolicyVersion !== CURRENT_PRIVACY_POLICY_VERSION) {
+    throw new BadRequestException("본인확인 개인정보 처리에 동의해야 KYC 촬영을 시작할 수 있습니다.");
+  }
 }

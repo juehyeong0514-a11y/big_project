@@ -2,6 +2,8 @@ export type UserRole = "ADMIN" | "ORGANIZATION" | "PROCTOR" | "CANDIDATE";
 
 export type AdminSignupRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export const CURRENT_PRIVACY_POLICY_VERSION = "2026-07-18" as const;
+
 // allow: SIZE_OK - centralized public DTO contract shared by API and web clients.
 export type ExamStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "ENDED" | "DELETED";
 
@@ -75,6 +77,7 @@ export interface AuthSession {
   token: string;
   user: User;
   organization: Organization;
+  passwordChangeRequired?: boolean;
 }
 
 export type ManageableAdminRole = "ORGANIZATION" | "PROCTOR";
@@ -98,6 +101,11 @@ export interface LoginInput {
   password: string;
 }
 
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface SetupStatus {
   enabled: boolean;
   reason: "READY" | "USERS_EXIST" | "DATABASE_UNAVAILABLE";
@@ -108,6 +116,8 @@ export interface CreateInitialAdminInput {
   name: string;
   email: string;
   password: string;
+  privacyConsentAccepted: boolean;
+  privacyPolicyVersion: typeof CURRENT_PRIVACY_POLICY_VERSION;
 }
 
 export interface CreateAdminSignupRequestInput {
@@ -127,6 +137,8 @@ export interface RegisterInput {
   name: string;
   email: string;
   password: string;
+  privacyConsentAccepted: boolean;
+  privacyPolicyVersion: typeof CURRENT_PRIVACY_POLICY_VERSION;
 }
 
 export type OrganizationAccessRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -244,6 +256,8 @@ export interface Candidate {
   email: string;
   status: CandidateStatus;
   inviteToken: string;
+  identityPrivacyConsentVersion?: string;
+  identityPrivacyConsentAcceptedAt?: string;
   createdAt: string;
 }
 
@@ -352,6 +366,8 @@ export interface IdentityVerification {
   livenessScore: number;
   ocrNameMatched: boolean;
   verificationChecks: string[];
+  privacyConsentVersion?: string;
+  privacyConsentAcceptedAt?: string;
   status: IdentityVerificationStatus;
   verifiedAt?: string;
   createdAt: string;
@@ -506,6 +522,11 @@ export interface CreateIdentityVerificationInput {
   providerSessionId?: string;
   documentUploadRef?: string;
   faceUploadRef?: string;
+}
+
+export interface IdentityPrivacyConsentInput {
+  privacyConsentAccepted: boolean;
+  privacyPolicyVersion: typeof CURRENT_PRIVACY_POLICY_VERSION;
 }
 
 export interface IdentityProviderSession {

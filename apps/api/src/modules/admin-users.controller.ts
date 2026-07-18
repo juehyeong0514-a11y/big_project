@@ -37,7 +37,9 @@ export class AdminUsersController {
   @Put("/:userId")
   async update(@Headers("authorization") authorization: string | undefined, @Param("userId") userId: string, @Body() body: UpdateAdminUserInput) {
     const session = await this.auth.me(this.extractBearerToken(authorization));
-    return this.adminUsers.updateManagedUser(session, userId, body);
+    const user = await this.adminUsers.updateManagedUser(session, userId, body);
+    this.auth.revokeUserSessions(userId);
+    return user;
   }
 
   @Delete("/:userId")
@@ -57,7 +59,9 @@ export class AdminUsersController {
   @Post("/signup-requests/:requestId/review")
   async reviewSignupRequest(@Headers("authorization") authorization: string | undefined, @Param("requestId") requestId: string, @Body() body: ReviewAdminSignupRequestInput) {
     const session = await this.auth.me(this.extractBearerToken(authorization));
-    return this.signupRequests.reviewRequest(session, requestId, body);
+    const request = await this.signupRequests.reviewRequest(session, requestId, body);
+    if (request.status === "APPROVED" && request.approvedUserId) this.auth.revokeUserSessions(request.approvedUserId);
+    return request;
   }
 
   @Post("/organization-requests")
@@ -108,7 +112,9 @@ export class AdminUsersController {
   @Post("/organization-requests/:requestId/review")
   async reviewOrganizationRequest(@Headers("authorization") authorization: string | undefined, @Param("requestId") requestId: string, @Body() body: ReviewOrganizationAccessRequestInput) {
     const session = await this.auth.me(this.extractBearerToken(authorization));
-    return this.organizationRequests.reviewRequest(session, requestId, body);
+    const request = await this.organizationRequests.reviewRequest(session, requestId, body);
+    if (request.status === "APPROVED") this.auth.revokeUserSessions(request.user.id);
+    return request;
   }
 
   private extractBearerToken(authorization?: string) {

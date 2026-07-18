@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Inject, Param, Post } from "@nestjs/common";
+import { Controller, Headers, Inject, Param, Post } from "@nestjs/common";
 import type { GenerateReportInput } from "@dcvp/shared";
 import { AiEvaluationService } from "../services/ai-evaluation.service.js";
 import { PlatformStore } from "../services/platform-store.service.js";
@@ -11,12 +11,6 @@ export class AiController {
     @Inject(PlatformStore) private readonly store: PlatformStore,
     @Inject(AuthService) private readonly auth: AuthService
   ) {}
-
-  @Post("/report/generate")
-  async generateReport(@Body() body: GenerateReportInput) {
-    const report = await this.aiEvaluation.generateReport(body);
-    return this.store.saveCompetencyReport(body, report);
-  }
 
   @Post("/exams/:examId/reports/generate")
   async generateExamReports(@Headers("authorization") authorization: string | undefined, @Param("examId") examId: string) {

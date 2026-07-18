@@ -98,7 +98,7 @@ export async function saveCandidateCodeDraftInStore(request: SaveCodeDraftReques
 
 export async function runCandidateCodeInStore(request: RunCodeRequest) {
   const { context, input, invite, testCases, memoryExecutions } = request;
-  const result = await context.codeRunner.judge(input.language, input.code, [...testCases]);
+  const result = await context.codeRunner.judge(input.language, input.code, [...testCases], invite.candidate.id);
   const db = await context.runDatabase(async () => {
     const execution = await context.prisma.codeExecution.create({
       data: {
@@ -169,7 +169,7 @@ export async function submitCandidateCodeInStore(request: SubmitCodeRequest) {
   const { context, input, invite, question, testCases, memoryState } = request;
   const runResult =
     question.type === "CODING"
-      ? await context.codeRunner.judge(input.language, input.code, [...testCases])
+      ? await context.codeRunner.judge(input.language, input.code, [...testCases], invite.candidate.id)
       : evaluateTextAnswer(question, input.code);
   const score = calculateSubmissionScore(runResult);
 

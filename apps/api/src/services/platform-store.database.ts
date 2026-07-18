@@ -39,7 +39,7 @@ export class PlatformStoreDatabase {
         return null;
       }
 
-      console.error("Database operation failed.", error);
+      console.error("Database operation failed; details are suppressed to protect configuration secrets.");
       throw new ServiceUnavailableException("Database operation failed.");
     }
   }

@@ -1,4 +1,4 @@
-import type { AdminSignupRequest, AuthSession, CreateAdminSignupRequestInput, CreateInitialAdminInput, LoginInput, RegisterInput, SetupStatus } from "@dcvp/shared";
+import type { AuthSession, ChangePasswordInput, CreateInitialAdminInput, LoginInput, RegisterInput, SetupStatus } from "@dcvp/shared";
 import { request } from "./apiCore";
 
 export const authApi = {
@@ -18,9 +18,10 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify(input)
     }),
-  createAdminSignupRequest: (input: CreateAdminSignupRequestInput) =>
-    request<AdminSignupRequest>("/api/auth/admin-signup-requests", {
+  changePassword: (token: string, input: ChangePasswordInput) =>
+    request<AuthSession>("/api/auth/change-password", {
       method: "POST",
+      token,
       body: JSON.stringify(input)
     }),
   me: (token: string) => request<AuthSession>("/api/auth/me", { token }),

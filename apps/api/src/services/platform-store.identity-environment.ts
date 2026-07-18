@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@dcvp/shared";
 import type {
   CandidateInvite,
   CreateEnvironmentCheckInput,
@@ -43,6 +44,7 @@ const documentCaptureMarker = "document-capture-confirmed";
 const minimumDocumentAuthenticityScore = 85;
 const minimumFaceMatchScore = 80;
 const minimumLivenessScore = 80;
+const requiredIdentityVerificationChecks = ["DOCUMENT_AUTHENTICITY", "FACE_MATCH", "LIVENESS", "OCR_NAME_MATCH"] as const;
 
 function rejectRawIdentityMedia(input: CreateIdentityVerificationInput) {
   if (input.documentImageName) {
@@ -56,7 +58,8 @@ function didPassIdentityProviderChecks(engineResult: Awaited<ReturnType<Identity
     engineResult.documentAuthenticityScore >= minimumDocumentAuthenticityScore &&
     engineResult.faceMatchScore >= minimumFaceMatchScore &&
     engineResult.livenessScore >= minimumLivenessScore &&
-    engineResult.ocrNameMatched
+    engineResult.ocrNameMatched &&
+    requiredIdentityVerificationChecks.every((check) => engineResult.verificationChecks.includes(check))
   );
 }
 
@@ -109,8 +112,12 @@ export async function saveCandidateEnvironmentCheckInStore(request: SaveCandidat
 
 export async function verifyCandidateIdentityInStore(request: VerifyCandidateIdentityRequest) {
   const { context, input, invite, memoryVerifications } = request;
+  const privacyConsentAcceptedAt = invite.candidate.identityPrivacyConsentAcceptedAt;
   if (!invite.exam.identityVerificationEnabled) {
     throw new BadRequestException("이 시험은 본인확인이 비활성화되어 있습니다.");
+  }
+  if (invite.candidate.identityPrivacyConsentVersion !== CURRENT_PRIVACY_POLICY_VERSION || !privacyConsentAcceptedAt) {
+    throw new BadRequestException("현재 개인정보 처리방침에 동의한 후 본인확인을 진행해주세요.");
   }
   rejectRawIdentityMedia(input);
   if (!input.providerSessionId || !input.documentUploadRef || !input.faceUploadRef) {
@@ -163,6 +170,8 @@ export async function verifyCandidateIdentityInStore(request: VerifyCandidateIde
         livenessScore,
         ocrNameMatched,
         verificationChecks,
+        privacyConsentVersion: CURRENT_PRIVACY_POLICY_VERSION,
+        privacyConsentAcceptedAt: new Date(privacyConsentAcceptedAt),
         status,
         verifiedAt
       }
@@ -192,6 +201,8 @@ export async function verifyCandidateIdentityInStore(request: VerifyCandidateIde
     livenessScore,
     ocrNameMatched,
     verificationChecks,
+    privacyConsentVersion: CURRENT_PRIVACY_POLICY_VERSION,
+    privacyConsentAcceptedAt,
     status,
     verifiedAt: verifiedAt?.toISOString(),
     createdAt: nowIso()

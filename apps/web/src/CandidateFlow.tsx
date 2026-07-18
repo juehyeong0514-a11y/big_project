@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
@@ -14,13 +14,14 @@ import {
 import { api } from "./api";
 import { Status } from "./components";
 import { IdentityCaptureControls, IdentityResult, QrCodeCanvas } from "./CandidateIdentityParts";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@dcvp/shared";
 import type { IdentityProviderSession, ProctorDevice } from "@dcvp/shared";
 
-function useIdentityProviderSession(inviteToken: string) {
+function useIdentityProviderSession(inviteToken: string, privacyConsentAccepted: boolean) {
   const [session, setSession] = useState<IdentityProviderSession | null>(null);
   const getSession = async () => {
     if (session) return session;
-    const nextSession = await api.createIdentityProviderSession(inviteToken);
+    const nextSession = await api.createIdentityProviderSession(inviteToken, { privacyConsentAccepted, privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION });
     setSession(nextSession);
     return nextSession;
   };
@@ -108,7 +109,8 @@ export function CandidateMobileIdentityVerification() {
   const [livenessConfirmed, setLivenessConfirmed] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
-  const identitySession = useIdentityProviderSession(inviteToken);
+  const [privacyConsentAccepted, setPrivacyConsentAccepted] = useState(false);
+  const identitySession = useIdentityProviderSession(inviteToken, privacyConsentAccepted);
   useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -157,10 +159,17 @@ export function CandidateMobileIdentityVerification() {
     <main className="candidate-page mobile-identity-page">
       <section className="candidate-panel identity-panel">
         <div className="candidate-copy"><span className="eyebrow">모바일 촬영</span><h1>신분증과 얼굴을 촬영해주세요</h1><p>완료되면 PC 시험 화면에서 자동으로 인증 상태가 반영됩니다.</p></div>
+        <div className="privacy-consent">
+          <label className="privacy-consent-check">
+            <input type="checkbox" checked={privacyConsentAccepted} onChange={(event) => setPrivacyConsentAccepted(event.target.checked)} disabled={verified} />
+            <span><strong>[필수] 본인확인 개인정보·생체인식정보 처리에 동의합니다.</strong><small>신분증 정보, 얼굴 영상과 라이브니스 신호는 본인확인 목적으로 설정된 KYC 전문 업체에 전송됩니다. 플랫폼은 원본을 저장하지 않고 판정·점수·참조값과 동의 기록만 보관합니다.</small></span>
+          </label>
+          <Link to="/privacy" target="_blank" rel="noreferrer">개인정보 처리방침 및 위탁 안내 보기</Link>
+        </div>
         <IdentityCaptureControls documentProvided={documentProvided} faceCaptured={faceCaptured} livenessConfirmed={livenessConfirmed} verified={verified} verification={verification} videoRef={videoRef} cameraFacingMode={cameraFacingMode} onDocument={() => setDocumentProvided(true)} onFace={() => void captureFace()} onLiveness={() => setLivenessConfirmed(true)} onToggleCamera={toggleCamera} />
         <IdentityResult verification={verification} verified={verified} />
         <div className="identity-actions">
-          <button className="primary-action" type="button" onClick={() => mutation.mutate()} disabled={verified || mutation.isPending || !documentProvided || !faceCaptured || !livenessConfirmed}><IdCard size={18} />인증 완료하기</button>
+          <button className="primary-action" type="button" onClick={() => mutation.mutate()} disabled={verified || mutation.isPending || !privacyConsentAccepted || !documentProvided || !faceCaptured || !livenessConfirmed}><IdCard size={18} />인증 완료하기</button>
           <button className="secondary-action" type="button" onClick={() => navigate(`/candidate/${inviteToken}/mobile-proctor`)} disabled={!verified}><Video size={18} />보조 감독 카메라 열기</button>
         </div>
       </section>

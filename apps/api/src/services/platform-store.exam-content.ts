@@ -10,7 +10,7 @@ import type {
 } from "@dcvp/shared";
 import type { ExamAdminMemoryState, ExamAdminStoreContext } from "./platform-store.exam-admin.js";
 import { assertSessionCanAccessExam, assertSessionCanManageExams } from "./platform-store.exam-admin.js";
-import { createId, nowIso } from "./platform-store.helpers.js";
+import { createId, createSecretToken, nowIso } from "./platform-store.helpers.js";
 import { mapCandidate, mapQuestion, mapTestCase } from "./platform-store.mappers.js";
 
 export interface AddQuestionRequest {
@@ -136,7 +136,7 @@ export async function addCandidateInStore(request: AddCandidateRequest) {
         name: input.name,
         email: input.email,
         status: "INVITED",
-        inviteToken: createId("invite")
+        inviteToken: createSecretToken("invite")
       }
     });
 
@@ -154,7 +154,7 @@ export async function addCandidateInStore(request: AddCandidateRequest) {
     name: input.name,
     email: input.email,
     status: "INVITED",
-    inviteToken: createId("invite"),
+    inviteToken: createSecretToken("invite"),
     createdAt: nowIso()
   };
 

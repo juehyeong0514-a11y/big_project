@@ -1,4 +1,5 @@
 import { ServiceUnavailableException } from "@nestjs/common";
+import { isIP } from "node:net";
 
 export function providerBaseUrl() {
   const rawUrl = process.env.KYC_SANDBOX_API_BASE_URL;
@@ -36,13 +37,14 @@ function parseProviderUrl(rawUrl: string) {
 
 function isAllowedProviderUrl(url: URL) {
   if (isLoopbackHost(url.hostname)) {
-    return url.protocol === "http:" || url.protocol === "https:";
+    return process.env.NODE_ENV !== "production" && (url.protocol === "http:" || url.protocol === "https:");
   }
   return url.protocol === "https:" && !isIpLiteral(url.hostname);
 }
 
 function isLoopbackHost(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  const normalized = normalizeHostname(hostname);
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
 }
 
 function isPrivateIpLiteral(hostname: string) {
@@ -56,5 +58,10 @@ function isPrivateIpLiteral(hostname: string) {
 }
 
 function isIpLiteral(hostname: string) {
-  return hostname.includes(":") || isPrivateIpLiteral(hostname);
+  const normalized = normalizeHostname(hostname);
+  return isIP(normalized) !== 0 || isPrivateIpLiteral(normalized);
+}
+
+function normalizeHostname(hostname: string) {
+  return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
 }

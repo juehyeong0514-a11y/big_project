@@ -1,3 +1,5 @@
+import { sessionTokenStore } from "./sessionTokenStore";
+
 function getDevelopmentApiBaseUrl() {
   if (typeof window === "undefined") return "http://localhost:4000";
 
@@ -18,7 +20,7 @@ export class ApiRequestError extends Error {
 }
 
 export async function request<T>(path: string, init?: RequestInit & { token?: string }): Promise<T> {
-  const storedToken = typeof localStorage === "undefined" ? undefined : localStorage.getItem("dcvp_session_token") ?? undefined;
+  const storedToken = sessionTokenStore.get();
   const token = init?.token ?? storedToken;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,

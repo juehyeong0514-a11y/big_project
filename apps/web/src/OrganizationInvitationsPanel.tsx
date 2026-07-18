@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Send, UserPlus } from "lucide-react";
 import type { AuthSession, CreateOrganizationInvitationInput, OrganizationInvitation } from "@dcvp/shared";
 import { api } from "./api";
+import { maskEmailAddress } from "./privacyMasking";
 
 const invitationDefaults = { email: "", requestedRole: "PROCTOR" } satisfies CreateOrganizationInvitationInput;
 
@@ -72,7 +73,7 @@ function InvitationList({ invitations, isLoading, error }: { readonly invitation
       {error ? <span className="form-error">{errorMessage(error)}</span> : null}
       {!isLoading && !error && invitations.length === 0 ? <span>아직 보낸 초대가 없습니다.</span> : null}
       {invitations.length > 0 ? <div className="organization-invitation-row organization-invitation-row-heading"><span>계정 이메일</span><span>권한</span><span>상태</span></div> : null}
-      {invitations.map((invitation) => <div className="organization-invitation-row" key={invitation.id}><span>{invitation.email}</span><span>{roleLabels[invitation.requestedRole]}</span><span>{invitationStatusLabels[invitation.status]}</span></div>)}
+      {invitations.map((invitation) => <div className="organization-invitation-row" key={invitation.id}><span>{maskEmailAddress(invitation.email)}</span><span>{roleLabels[invitation.requestedRole]}</span><span>{invitationStatusLabels[invitation.status]}</span></div>)}
     </div>
   );
 }

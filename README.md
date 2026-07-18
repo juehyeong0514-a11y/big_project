@@ -50,7 +50,7 @@ pnpm dev:web
 
 ```text
 이메일: admin@acme.test
-비밀번호: demo1234
+비밀번호: @A1234567890 (개발 전용, 운영에서는 INITIAL_ADMIN_PASSWORD로 별도 설정)
 ```
 
 ## 2. 프로젝트 구조
@@ -172,7 +172,7 @@ docker-compose.prod.yml 운영용 PostgreSQL·API·웹·Caddy
 
 - 제출, 채점, 실행 횟수, 시간, 감독 위험 신호를 기반으로 역량 리포트를 생성하고 이력을 저장합니다.
 - 외부 AI API가 설정되지 않으면 현재는 신호 기반 규칙 계산으로 점수·강점·개선점·추천을 생성합니다.
-- 외부 AI API를 연결하면 `POST /api/ai/report/generate` 계약으로 위임합니다.
+- 외부 AI API를 연결하면 서버가 설정된 외부 서비스의 `POST /api/ai/report/generate` 계약으로 위임합니다. 이 경로는 DCVP의 공개 API가 아닙니다.
 - 시험 단위로 후보자 AI 리포트를 생성하고, 시험 보고서에서 저장된 리포트와 채점 결과를 확인할 수 있습니다.
 
 ### 3.8 운영 준비도
@@ -258,8 +258,11 @@ docker-compose.prod.yml 운영용 PostgreSQL·API·웹·Caddy
 | `KYC_SANDBOX_API_BASE_URL`, `KYC_SANDBOX_API_KEY` | KYC 제공자 연동 |
 | `AI_API_BASE_URL`, `AI_API_KEY` | 외부 AI 평가 API 연동 |
 | `INITIAL_ADMIN_*` | 운영 배포 시 최초 운영자 시드 계정 |
+| `VITE_PRIVACY_OFFICER_NAME`, `VITE_PRIVACY_CONTACT_EMAIL` | 개인정보 처리방침에 표시할 실제 보호책임자와 공개 문의 채널 |
 | `POSTGRES_PASSWORD` | 운영 PostgreSQL 비밀번호 |
 | `TLS_EMAIL`, `WEB_DOMAIN`, `API_DOMAIN` | Caddy HTTPS 인증서·도메인 설정 |
+| `AUTH_HTTPS_TRUST_PROXY` | 운영 Caddy가 사설 API 컨테이너의 TLS를 종료할 때만 `1`; 로컬 개발은 `0` |
+| `ENVIRONMENT_CHECK_SECRET` | 환경 점검 증빙 HMAC 서명 키. 운영에서는 placeholder가 아닌 32바이트 이상의 임의 비밀값 필수 |
 
 ## 6. 모바일 접속과 HTTPS
 
@@ -286,12 +289,58 @@ docker-compose.prod.yml 운영용 PostgreSQL·API·웹·Caddy
 
 ## 7. 데이터와 보안 원칙
 
-- 비밀번호는 PBKDF2 해시로 저장합니다. 기존 SHA-256 형식 계정은 정상 로그인 후 업그레이드합니다.
-- 인증 세션은 현재 API 프로세스 메모리에 저장됩니다.
-- 원본 KYC 촬영물은 플랫폼 DB에 저장하지 않고 KYC 제공자 파이프라인을 사용합니다.
-- 코드 실행은 네트워크 차단 Docker 컨테이너에서 수행합니다.
-- 운영 준비도 API는 API 키, 메일 키, KYC 키, TURN 자격증명을 반환하지 않습니다.
-- 운영 환경에서는 `DISABLE_DATABASE=0`, `ALLOW_DEMO_AUTH=0`이 필수입니다.
+### 인증과 비밀번호
+
+- 비밀번호 작성 규칙은 **12~256자, 영문 대문자·소문자·숫자·특수문자 중 3종 이상**입니다. 최초 운영자, 일반 회원가입, 기존 조직 관리자 신청, 비밀번호 변경에 같은 서버 규칙을 적용합니다.
+- 비밀번호는 임의 16바이트 salt와 PBKDF2-SHA-256 310,000회로 단방향 해시해 저장합니다. 평문 비밀번호는 DB에 저장하지 않습니다. 생성·검증은 Node 작업 스레드에서 비동기로 수행하며, 프로세스별 동시 연산 4개·대기 16개·대기시간 5초로 제한해 공개 요청이 이벤트 루프나 작업 큐를 고갈시키지 않게 합니다.
+- 이전 SHA-256 형식 계정은 정상 비밀번호로 로그인한 직후 PBKDF2 형식으로 자동 교체합니다.
+- 이메일·비밀번호가 틀리면 어느 값이 틀렸는지 구분하지 않는 같은 오류를 반환합니다. 존재하지 않는 계정에도 더미 해시 검증을 수행합니다.
+- 계정별 로그인 실패 횟수를 직렬화 트랜잭션으로 갱신하며 5회 실패 시 15분 동안 잠급니다. 잠금 중에도 동일한 인증 오류만 반환합니다.
+- 로그인은 1분 창 기준 계정 식별자 10회, 클라이언트 20회로 추가 제한합니다. 낮은 프로세스 전체 고정 할당량은 한 공격자가 정상 사용자까지 차단할 수 있어 사용하지 않고, 실제 고비용 PBKDF2 연산은 별도의 동시 실행·대기열 상한으로 보호합니다. 식별자는 메모리에 해시해 보관하고 운영 프록시를 명시적으로 신뢰할 때만 전달 IP 헤더를 사용합니다.
+- 공개 회원가입과 최초 운영자 생성은 같은 클라이언트 기준 분당 6회, 계정 식별자 기준 분당 3회로 제한해 공격자가 PBKDF2 대기열을 반복 점유하지 못하게 합니다.
+- 비밀번호 유효기간은 90일입니다. 만료되면 일반 API와 WebSocket 감독 참여를 차단하고 비밀번호 변경 화면만 허용합니다.
+- 비밀번호 변경, 계정 삭제, 역할·조직·이메일 변경 시 해당 계정의 기존 서버 세션을 회수합니다.
+- 세션 토큰은 전체 UUID 난수로 만들고 서버 메모리에만 저장합니다. 절대 만료 8시간, 미사용 만료 30분을 적용하며 브라우저는 `localStorage`가 아닌 탭 단위 `sessionStorage`에 저장합니다.
+- 세션별 만료 타이머가 수동 API 요청이 없어도 만료 즉시 철회 이벤트를 발생시키며, 로그아웃·만료 시 연결된 감독 WebSocket도 서버가 강제로 종료합니다.
+
+### 전송·브라우저 보안
+
+- 운영 모드에서는 모든 `/api/*` 요청이 HTTPS가 아니면 `403`으로 거부됩니다. Caddy가 TLS를 종료하는 구성에서만 `AUTH_HTTPS_TRUST_PROXY=1`을 사용합니다.
+- Caddy는 HSTS, CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`를 적용합니다. 웹 컨테이너의 Nginx에도 같은 CSP·브라우저 보호 헤더가 있습니다.
+- API와 Socket.IO CORS는 운영 `WEB_ORIGIN` 한 개만 허용합니다. 개발 환경은 지정 웹 포트의 localhost·사설 LAN 주소만 허용합니다.
+- 인증은 쿠키가 아니라 `Authorization: Bearer` 헤더를 사용하고 CORS의 `credentials`를 끕니다. 따라서 브라우저가 쿠키를 자동 첨부하는 전형적인 CSRF 경로는 없습니다. 향후 쿠키 인증을 도입하면 SameSite·CSRF 토큰 검증을 함께 구현해야 합니다.
+- API 응답은 기본적으로 `Cache-Control: no-store`이며 프레임 삽입과 MIME 추측을 차단합니다.
+
+### 개인정보 동의와 표시 제한
+
+- 회원가입과 최초 운영자 생성은 현재 개인정보 처리방침 버전의 필수 동의가 없으면 서버에서 거부합니다. DB에는 동의 버전과 동의 시각을 함께 저장합니다.
+- 로그인 화면과 모든 로그인 후 화면 하단에서 `/privacy` 개인정보 처리방침에 접근할 수 있습니다.
+- 운영자·조직 관리자 화면은 이름과 이메일을 기본 마스킹합니다. 계정 수정 버튼을 명시적으로 누른 경우에만 수정 입력칸에서 원문을 확인합니다.
+- 공통 마스킹 도구는 이름 가운데 글자, 이메일 ID 앞 2자 이후, 휴대전화 가운데 번호, 주민등록번호 뒤 7자리, 카드번호 7~12번째, 주소 숫자, IPv4 17~24비트·IPv6 마지막 16비트를 가릴 수 있습니다.
+- 응시자 본인 화면에는 본인의 이름을 표시할 수 있지만 다른 응시자의 개인정보를 보는 관리·감독·리포트 화면에는 마스킹을 적용합니다.
+- 일반 계정은 운영 대시보드, 시험 상세·비공개 테스트케이스, AI 리포트, 운영 준비도 API에 접근할 수 없습니다. 감독관은 시험 목록과 실시간 감독만 볼 수 있고 시험 편집 상세·AI 리포트는 볼 수 없습니다. 이 제한은 화면과 API 서비스 양쪽에서 검사합니다.
+
+### KYC·파일·외부 URL
+
+- 플랫폼에는 사용자가 임의 파일을 올리는 일반 파일 업로드 API가 없습니다. 따라서 확장자·개수 제한이 필요한 업로드 표면도 현재는 없습니다.
+- 신분증·얼굴 원본은 플랫폼 API나 DB에 저장하지 않습니다. 모바일 웹은 KYC 제공자 세션과 짧은 참조값을 사용하고, 플랫폼은 제공자의 최종 판정·점수·참조 ID만 저장합니다.
+- 모바일 KYC를 시작하기 전에 신분증 정보·얼굴·라이브니스 신호의 목적과 외부 KYC 업체 전송을 고지하고 필수 동의를 받습니다. 서버는 현재 처리방침 버전과 동의 시각을 후보자 및 인증 결과에 기록하며 누락되거나 오래된 동의는 거부합니다.
+- KYC 참조값은 최대 256자로 제한하며 `data:` URL, JSON 데이터, 과도하게 긴 값은 거부합니다. 단순 파일명이나 촬영 완료 불리언만으로 본인확인을 통과시키지 않습니다.
+- KYC는 문서 진위 85점 이상, 얼굴 일치 80점 이상, 라이브니스 80점 이상, OCR 이름 일치, 제공자 `VERIFIED`를 모두 충족해야 통과합니다.
+- KYC·AI·메일·Webhook의 외부 요청은 URL 구문, HTTPS, 사용자 정보 포함 여부, 직접 IP, DNS가 해석한 사설·예약 주소를 검사합니다. 리다이렉트를 차단하고 10~15초 제한시간과 64KiB 응답 한도를 적용합니다.
+- API 키와 비밀값은 `.env` 또는 배포 비밀 저장소에만 둡니다. `.env`는 Git에서 제외되며 `.env.example`에는 placeholder만 둡니다. 공급자 오류 본문과 DB 예외의 비밀정보는 로그·브라우저 응답에 그대로 노출하지 않습니다.
+
+### 코드 실행과 데이터 저장
+
+- 응시 코드는 `execFile` 인자 배열로 Docker를 호출하므로 셸 문자열 결합을 사용하지 않습니다.
+- 개발용 러너는 API 프로세스 전체 동시 실행 2개, 대기열 8개, 대기 5초, 응시자별 분당 6회와 IP별 분당 제한을 적용합니다. 각 컨테이너는 최대 8초, 한 채점 요청 전체는 최대 30초 후 종료되어 여러 테스트케이스가 실행 슬롯을 장시간 점유하지 못합니다.
+- 운영 API 내부에서 로컬 Docker 러너는 비활성화됩니다. 운영 채점을 사용하려면 API·DB·Docker 호스트와 네트워크/권한이 분리된 전용 러너 서비스, 인증된 작업 큐, 전역 자원 한도와 취소 처리를 먼저 구축해야 합니다.
+- 공개 초대 정보에는 시험 문제가 포함되지 않습니다. 문제와 선택지는 서버가 일정·환경·본인확인·보조캠 조건을 검증한 시험 작업공간에서만 반환합니다.
+- 실행 컨테이너는 네트워크 없음, 읽기 전용 루트, 모든 capability 제거, `no-new-privileges`, 비특권 사용자, PID·CPU·메모리·시간 제한, 읽기 전용 작업 공간, 제한된 `tmpfs`를 적용합니다.
+- 코드 크기는 100,000자, 테스트케이스는 50개, 프로세스 출력 버퍼는 1MiB로 제한합니다.
+- 원본 KYC 촬영물과 생체 이미지는 저장하지 않지만 PostgreSQL의 계정·시험·KYC 판정 메타데이터가 저장되는 운영 디스크와 백업은 반드시 암호화된 관리형 DB 또는 암호화 볼륨에 배치해야 합니다. 이 항목은 애플리케이션 코드가 아니라 배포 인프라 통제입니다.
+- 운영 준비도 API는 API 키, 메일 키, KYC 키, TURN 자격증명을 반환하지 않으며 운영자 역할만 호출할 수 있습니다.
+- 운영 환경에서는 `NODE_ENV=production`, `DISABLE_DATABASE=0`, `ALLOW_DEMO_AUTH=0`, 32바이트 이상 `ENVIRONMENT_CHECK_SECRET`이 필수입니다.
 
 KYC 요청/응답 계약과 점수 통과 기준은 [docs/identity-provider-spec.md](docs/identity-provider-spec.md)에 있습니다.
 
@@ -311,6 +360,10 @@ node apps/api/src/services/organization-invitations.regression.mjs
 node apps/api/src/services/admin-users.regression.mjs
 node apps/api/src/services/identity-verification.regression.mjs
 node apps/api/src/services/operations-readiness.regression.mjs
+node apps/api/src/services/auth-security-lifecycle.regression.mjs
+node apps/api/src/services/authorization-boundaries.regression.mjs
+node apps/api/src/services/security-hardening.regression.mjs
+node --experimental-strip-types apps/web/src/privacy-masking.regression.mjs
 ```
 
 기능 변경 후에는 타입 검사만으로 끝내지 말고 다음 사용 흐름을 브라우저에서 직접 확인합니다.
@@ -327,6 +380,7 @@ node apps/api/src/services/operations-readiness.regression.mjs
 1. `.env.example`를 기준으로 운영 환경 변수 파일을 작성합니다.
 2. 실제 DNS, HTTPS, Resend 발신 도메인, KYC 제공자, TURN 서버를 준비합니다.
 3. 운영자 시드 계정을 `INITIAL_ADMIN_*`으로 지정합니다.
+   `db:seed`는 기존 운영자 비밀번호를 덮어쓰지 않으며 운영 모드에서는 샘플 시험·예측 가능한 데모 초대 링크를 생성하지 않습니다.
 4. 배포합니다.
 
 ```bash
@@ -362,7 +416,7 @@ curl https://<API-도메인>/api/mobile-access
 ### 보안·확장성
 
 1. **세션 영속화**: 현재 세션은 API 메모리 `Map`에만 있어 재시작 시 로그아웃되며 다중 API 인스턴스에서 공유되지 않습니다. Redis 기반 세션 또는 짧은 만료 JWT + 재발급 구조로 교체합니다.
-2. **인증 강화**: 비밀번호 재설정, 이메일 검증, MFA, 로그인 시도 제한, 감사 로그를 추가합니다.
+2. **인증 강화**: 현재 구현된 로그인 실패 잠금·비밀번호 만료에 더해 비밀번호 재설정, 이메일 검증, MFA, 보안 감사 로그를 추가합니다.
 3. **권한 감사 고도화**: 권한 변경·승인·거절·삭제·감독 조치를 감사 로그로 남기고 운영자 검색/내보내기를 제공합니다.
 4. **조직 초대 관리 완성**: 현재 조직 초대는 생성·조회·수락 중심입니다. 취소, 만료, 재발송 여부, 관리자 UI의 필터/검색을 추가합니다.
 5. **채점 격리 강화**: 실행 큐, 동시 실행 제한, 이미지 사전 준비, 디스크/출력 제한, 작업자 분리, 관측 지표를 도입합니다.

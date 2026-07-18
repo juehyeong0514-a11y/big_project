@@ -96,6 +96,8 @@ export function mapIdentityVerification(verification: {
     livenessScore: number;
     ocrNameMatched: boolean;
     verificationChecks: string[];
+    privacyConsentVersion: string | null;
+    privacyConsentAcceptedAt: Date | null;
     status: IdentityVerification["status"];
     verifiedAt: Date | null;
     createdAt: Date;
@@ -117,6 +119,8 @@ export function mapIdentityVerification(verification: {
       livenessScore: verification.livenessScore,
       ocrNameMatched: verification.ocrNameMatched,
       verificationChecks: verification.verificationChecks,
+      privacyConsentVersion: verification.privacyConsentVersion ?? undefined,
+      privacyConsentAcceptedAt: verification.privacyConsentAcceptedAt?.toISOString(),
       status: verification.status,
       verifiedAt: verification.verifiedAt?.toISOString(),
       createdAt: verification.createdAt.toISOString()

@@ -5,6 +5,7 @@ import type { CreateProctorActionInput, LiveProctorCandidateState } from "@dcvp/
 import { api } from "./api";
 import { LiveProctorVideoTile } from "./LiveProctorVideoTile";
 import { proctorActionLabel, proctorEventLabel, proctorEventTone, proctorStreamKey, riskLabel } from "./proctoring";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 
 export function LiveProctorCard({ candidate, streams }: { readonly candidate: LiveProctorCandidateState; readonly streams: Readonly<Record<string, MediaStream>> }) {
   const queryClient = useQueryClient();
@@ -29,8 +30,8 @@ export function LiveProctorCard({ candidate, streams }: { readonly candidate: Li
     <article className={`live-proctor-card risk-${candidate.riskLevel.toLowerCase()}`}>
       <div className="live-proctor-header">
         <div>
-          <strong>{candidate.candidate.name}</strong>
-          <span>{candidate.candidate.email}</span>
+          <strong>{maskDisplayName(candidate.candidate.name)}</strong>
+          <span>{maskEmailAddress(candidate.candidate.email)}</span>
         </div>
         <span className={`risk-badge risk-${candidate.riskLevel.toLowerCase()}`}>{riskLabel(candidate.riskLevel)} {candidate.riskScore}</span>
       </div>

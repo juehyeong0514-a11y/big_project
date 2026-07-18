@@ -10,6 +10,7 @@ import type {
 
 export const nowIso = () => new Date().toISOString();
 export const createId = (prefix: string) => `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
+export const createSecretToken = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 export const supportedRunnerLanguages = new Set(["javascript", "python"]);
 export const proctorHeartbeatTimeoutMs = () => Number(process.env.PROCTOR_HEARTBEAT_TIMEOUT_MS ?? 30_000);
 

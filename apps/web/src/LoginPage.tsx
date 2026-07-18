@@ -2,16 +2,23 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { KeyRound, ShieldCheck, UserPlus } from "lucide-react";
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@dcvp/shared";
 import type { AuthSession, CreateInitialAdminInput, RegisterInput, SetupStatus } from "@dcvp/shared";
+import { Link } from "react-router-dom";
 import { api } from "./api";
+import { PasswordPolicyHint } from "./PasswordPolicyHint";
+import { PrivacyConsentField } from "./PrivacyConsentField";
+import { sessionTokenStore } from "./sessionTokenStore";
+import { privacyContact } from "./privacyContact";
+import { passwordPolicyError } from "./passwordPolicy";
 import "./LoginPage.css";
 
-const demoLoginDefaults = import.meta.env.DEV ? { email: "admin@acme.test", password: "demo1234" } : { email: "", password: "" };
-const initialOperatorDefaults = { organizationName: "", name: "", email: "", password: "" } satisfies CreateInitialAdminInput;
-const registrationDefaults = { name: "", email: "", password: "" } satisfies RegisterInput;
+const demoLoginDefaults = import.meta.env.DEV ? { email: "admin@acme.test", password: "@A1234567890" } : { email: "", password: "" };
+const initialOperatorDefaults = { organizationName: "", name: "", email: "", password: "", privacyConsentAccepted: false, privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION } satisfies CreateInitialAdminInput;
+const registrationDefaults = { name: "", email: "", password: "", privacyConsentAccepted: false, privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION } satisfies RegisterInput;
 
 function setupStatusMessage(status?: SetupStatus) {
-  if (!status) return "초기 운영자 생성 가능 여부를 확인하는 중입니다.";
+  if (!status) return "초기 운영자 계정 생성 가능 여부를 확인하는 중입니다.";
   switch (status.reason) {
     case "DATABASE_UNAVAILABLE":
       return "DB 연결이 없어 초기 운영자 생성은 비활성화되었습니다. 로컬 개발 환경에서는 테스트 계정으로 로그인할 수 있습니다.";
@@ -33,25 +40,27 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
   const [password, setPassword] = useState(demoLoginDefaults.password);
   const [initialOperator, setInitialOperator] = useState<CreateInitialAdminInput>(initialOperatorDefaults);
   const [registration, setRegistration] = useState<RegisterInput>(registrationDefaults);
+  const [registrationValidationError, setRegistrationValidationError] = useState<string | null>(null);
+  const [initialOperatorValidationError, setInitialOperatorValidationError] = useState<string | null>(null);
   const setupQuery = useQuery({ queryKey: ["auth-setup"], queryFn: api.setupStatus });
   const mutation = useMutation({
     mutationFn: api.login,
     onSuccess: (session) => {
-      localStorage.setItem("dcvp_session_token", session.token);
+      sessionTokenStore.set(session.token);
       onLogin(session);
     }
   });
   const setupMutation = useMutation({
     mutationFn: api.createInitialAdmin,
     onSuccess: (session) => {
-      localStorage.setItem("dcvp_session_token", session.token);
+      sessionTokenStore.set(session.token);
       onLogin(session);
     }
   });
   const registrationMutation = useMutation({
     mutationFn: api.register,
     onSuccess: (session) => {
-      localStorage.setItem("dcvp_session_token", session.token);
+      sessionTokenStore.set(session.token);
       onLogin(session);
     }
   });
@@ -62,10 +71,22 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
   };
   const submitInitialOperator = (event: FormEvent) => {
     event.preventDefault();
+    const validationError = passwordPolicyError(initialOperator.password);
+    if (validationError) {
+      setInitialOperatorValidationError(validationError);
+      return;
+    }
+    setInitialOperatorValidationError(null);
     setupMutation.mutate(initialOperator);
   };
   const submitRegistration = (event: FormEvent) => {
     event.preventDefault();
+    const validationError = passwordPolicyError(registration.password);
+    if (validationError) {
+      setRegistrationValidationError(validationError);
+      return;
+    }
+    setRegistrationValidationError(null);
     registrationMutation.mutate(registration);
   };
   const fillDemoAccount = () => {
@@ -95,13 +116,13 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
           </label>
           <label>
             비밀번호
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required />
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" maxLength={256} required />
           </label>
           {import.meta.env.DEV ? (
             <div className="login-demo-account">
               <div>
                 <strong>테스트 운영자</strong>
-                <span>admin@acme.test / demo1234</span>
+                <span>{demoLoginDefaults.email} / {demoLoginDefaults.password}</span>
               </div>
               <button className="ghost-action" type="button" onClick={fillDemoAccount}>
                 <KeyRound size={16} />
@@ -109,7 +130,7 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
               </button>
             </div>
           ) : null}
-          {mutation.isError ? <div className="form-error">{mutation.error instanceof Error ? mutation.error.message : "로그인 정보를 확인해주세요."}</div> : null}
+          {mutation.isError ? <div className="form-error" role="alert">로그인 정보를 확인해주세요.</div> : null}
           <button className="primary-action" type="submit" disabled={mutation.isPending}>
             <ShieldCheck size={18} />
             로그인
@@ -122,12 +143,15 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
           <div className="login-copy login-copy-compact">
             <span className="eyebrow">일반 회원가입</span>
             <h2>일반 계정 생성</h2>
-            <p>계정을 만든 뒤 조직 코드를 통해 소속 신청을 할 수 있습니다.</p>
+            <p>계정을 만든 뒤 조직 코드 또는 초대를 통해 소속 신청을 할 수 있습니다.</p>
           </div>
           <label>이름<input value={registration.name} onChange={(event) => setRegistration({ ...registration, name: event.target.value })} required /></label>
           <label>이메일<input value={registration.email} onChange={(event) => setRegistration({ ...registration, email: event.target.value })} type="email" required /></label>
-          <label>비밀번호<input value={registration.password} onChange={(event) => setRegistration({ ...registration, password: event.target.value })} type="password" minLength={10} required /></label>
-          {registrationMutation.isError ? <div className="form-error">{registrationMutation.error instanceof Error ? registrationMutation.error.message : "계정을 생성하지 못했습니다."}</div> : null}
+          <label>비밀번호<input value={registration.password} onChange={(event) => setRegistration({ ...registration, password: event.target.value })} type="password" minLength={12} maxLength={256} autoComplete="new-password" aria-describedby="registration-password-policy" required /></label>
+          <PasswordPolicyHint id="registration-password-policy" />
+          <PrivacyConsentField checked={registration.privacyConsentAccepted} describedBy="registration-privacy-consent" onChange={(privacyConsentAccepted) => setRegistration({ ...registration, privacyConsentAccepted })} />
+          {registrationValidationError ? <div className="form-error" role="alert">{registrationValidationError}</div> : null}
+          {registrationMutation.isError ? <div className="form-error" role="alert">{registrationMutation.error instanceof Error ? registrationMutation.error.message : "계정을 생성하지 못했습니다."}</div> : null}
           <button className="secondary-action" type="submit" disabled={registrationMutation.isPending}><UserPlus size={18} />계정 생성</button>
         </form>
 
@@ -154,9 +178,12 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
               </label>
               <label>
                 운영자 비밀번호
-                <input value={initialOperator.password} onChange={(event) => setInitialOperator({ ...initialOperator, password: event.target.value })} type="password" minLength={10} required />
+                <input value={initialOperator.password} onChange={(event) => setInitialOperator({ ...initialOperator, password: event.target.value })} type="password" minLength={12} maxLength={256} autoComplete="new-password" aria-describedby="initial-operator-password-policy" required />
               </label>
-              {setupMutation.isError ? <div className="form-error">{setupMutation.error instanceof Error ? setupMutation.error.message : "최초 운영자 생성에 실패했습니다."}</div> : null}
+              <PasswordPolicyHint id="initial-operator-password-policy" />
+              <PrivacyConsentField checked={initialOperator.privacyConsentAccepted} describedBy="initial-operator-privacy-consent" onChange={(privacyConsentAccepted) => setInitialOperator({ ...initialOperator, privacyConsentAccepted })} />
+              {initialOperatorValidationError ? <div className="form-error" role="alert">{initialOperatorValidationError}</div> : null}
+              {setupMutation.isError ? <div className="form-error" role="alert">{setupMutation.error instanceof Error ? setupMutation.error.message : "최초 운영자 생성에 실패했습니다."}</div> : null}
               <button className="secondary-action" type="submit" disabled={setupMutation.isPending}>
                 <UserPlus size={18} />
                 최초 운영자 생성
@@ -164,6 +191,7 @@ export function LoginPage({ onLogin }: { readonly onLogin: (session: AuthSession
             </form>
           </>
         ) : null}
+        <footer className="login-footer"><Link to="/privacy">개인정보 처리방침</Link><span>개인정보 문의: {privacyContact.email}</span></footer>
       </section>
     </main>
   );

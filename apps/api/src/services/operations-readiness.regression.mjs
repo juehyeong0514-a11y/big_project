@@ -33,6 +33,7 @@ try {
       kyc: "READY",
       "public-url": "WARNING",
       auth: "READY",
+      "code-runner": "WARNING",
       proctor: "WARNING",
       "proctor-ice": "WARNING"
     }
@@ -54,6 +55,7 @@ try {
       kyc: "ACTION_REQUIRED",
       "public-url": "WARNING",
       auth: "READY",
+      "code-runner": "WARNING",
       proctor: "WARNING",
       "proctor-ice": "WARNING"
     }
@@ -76,6 +78,7 @@ try {
       kyc: "READY",
       "public-url": "READY",
       auth: "READY",
+      "code-runner": "WARNING",
       proctor: "READY",
       "proctor-ice": "READY"
     }

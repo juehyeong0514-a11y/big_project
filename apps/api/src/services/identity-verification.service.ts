@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import type { IdentityProviderSession, KycProviderDecision } from "@dcvp/shared";
 import { providerBaseUrl, rejectUnsafeUploadReference } from "./identity-provider-security.js";
+import { OutboundRequestSecurityError, readBoundedJson, secureOutboundFetch } from "./outbound-http-security.js";
 
 export interface IdentityVerificationEngineInput {
   candidateId: string;
@@ -55,7 +56,7 @@ export class IdentityVerificationService {
       throw new ServiceUnavailableException("KYC 세션 생성에는 KYC_SANDBOX_API_BASE_URL과 KYC_SANDBOX_API_KEY가 필요합니다.");
     }
 
-    const response = await fetch(`${baseUrl}/identity/sessions`, {
+    const response = await this.callProvider(`${baseUrl}/identity/sessions`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -75,7 +76,7 @@ export class IdentityVerificationService {
       throw new ServiceUnavailableException(`KYC 세션 provider 호출 실패 (${response.status}). provider 응답 본문은 보안상 노출하지 않습니다.`);
     }
 
-    return this.normalizeSession(this.parseSessionResponse(await response.json()));
+    return this.normalizeSession(this.parseSessionResponse(await this.readProviderJson(response)));
   }
 
   async verify(input: IdentityVerificationEngineInput): Promise<IdentityVerificationEngineResult> {
@@ -91,7 +92,7 @@ export class IdentityVerificationService {
     rejectUnsafeUploadReference(input.documentUploadRef, "documentUploadRef");
     rejectUnsafeUploadReference(input.faceUploadRef, "faceUploadRef");
 
-    const response = await fetch(`${baseUrl}/identity/verify`, {
+    const response = await this.callProvider(`${baseUrl}/identity/verify`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -118,16 +119,41 @@ export class IdentityVerificationService {
       throw new ServiceUnavailableException(`KYC provider 호출 실패 (${response.status}). provider 응답 본문은 보안상 노출하지 않습니다.`);
     }
 
-    return this.normalizeProviderResult(this.parseProviderResponse(await response.json()));
+    return this.normalizeProviderResult(this.parseProviderResponse(await this.readProviderJson(response)));
+  }
+
+  private async callProvider(url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await secureOutboundFetch(url, init);
+    } catch (error) {
+      if (error instanceof OutboundRequestSecurityError) {
+        throw new ServiceUnavailableException("KYC provider에 안전하게 연결할 수 없습니다.");
+      }
+      throw error;
+    }
+  }
+
+  private async readProviderJson(response: Response): Promise<unknown> {
+    try {
+      return await readBoundedJson(response);
+    } catch (error) {
+      if (error instanceof OutboundRequestSecurityError) {
+        throw new ServiceUnavailableException("KYC provider 응답 형식 또는 크기가 안전하지 않습니다.");
+      }
+      throw error;
+    }
   }
 
   private normalizeSession(result: KycProviderSessionResponse): IdentityProviderSession {
-    const providerSessionId = this.requiredString(result.providerSessionId, "providerSessionId");
-    const documentUploadRef = this.requiredString(result.documentUploadRef, "documentUploadRef");
-    const faceUploadRef = this.requiredString(result.faceUploadRef, "faceUploadRef");
-    const expiresAt = this.requiredString(result.expiresAt, "expiresAt");
+    const providerSessionId = this.requiredString(result.providerSessionId, "providerSessionId", 256);
+    const documentUploadRef = this.requiredString(result.documentUploadRef, "documentUploadRef", 256);
+    const faceUploadRef = this.requiredString(result.faceUploadRef, "faceUploadRef", 256);
+    const expiresAt = this.requiredString(result.expiresAt, "expiresAt", 64);
+    if (!Number.isFinite(Date.parse(expiresAt))) {
+      throw new ServiceUnavailableException("KYC provider 응답의 expiresAt 값이 올바른 날짜가 아닙니다.");
+    }
     return {
-      provider: result.provider ?? "kyc-sandbox",
+      provider: result.provider?.slice(0, 64) ?? "kyc-sandbox",
       providerSessionId,
       documentUploadRef,
       faceUploadRef,
@@ -142,9 +168,9 @@ export class IdentityVerificationService {
       livenessScore: this.requiredScore(result.livenessScore, "livenessScore"),
       ocrNameMatched: result.ocrNameMatched === true,
       verificationChecks: this.normalizeChecks(result.verificationChecks),
-      provider: result.provider ?? "kyc-sandbox",
+      provider: result.provider?.slice(0, 64) ?? "kyc-sandbox",
       providerDecision: this.requiredDecision(result.providerDecision),
-      providerReferenceId: this.requiredString(result.providerReferenceId, "providerReferenceId"),
+      providerReferenceId: this.requiredString(result.providerReferenceId, "providerReferenceId", 256),
       failureReason: this.sanitizedFailureReason(result.failureReason)
     };
   }
@@ -184,7 +210,7 @@ export class IdentityVerificationService {
       return [];
     }
 
-    return checks.filter((check): check is string => typeof check === "string");
+    return checks.filter((check): check is string => typeof check === "string" && check.length <= 200).slice(0, 20);
   }
 
   private requiredScore(score: unknown, fieldName: string) {
@@ -208,11 +234,11 @@ export class IdentityVerificationService {
     }
   }
 
-  private requiredString(value: unknown, fieldName: string) {
-    if (typeof value === "string" && value.trim()) {
-      return value;
+  private requiredString(value: unknown, fieldName: string, maxLength: number) {
+    if (typeof value === "string" && value.trim() && value.length <= maxLength) {
+      return value.trim();
     }
-    throw new ServiceUnavailableException(`KYC provider 응답에 ${fieldName} 값이 없습니다.`);
+    throw new ServiceUnavailableException(`KYC provider 응답의 ${fieldName} 값이 없거나 허용 길이를 초과했습니다.`);
   }
 
   private readUnknown(value: object, key: string): unknown {

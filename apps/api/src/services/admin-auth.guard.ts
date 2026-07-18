@@ -13,7 +13,7 @@ export class AdminAuthGuard implements CanActivate {
       return true;
     }
 
-    await this.auth.me(this.extractBearerToken(request.headers.authorization));
+    await this.auth.requireActiveSession(this.extractBearerToken(request.headers.authorization));
     return true;
   }
 

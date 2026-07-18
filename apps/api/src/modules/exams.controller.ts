@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Inject, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Headers, HttpException, HttpStatus, Inject, Param, Patch, Post, Req } from "@nestjs/common";
 import type {
   CodeRunInput,
   CodeSubmitInput,
@@ -14,11 +14,15 @@ import type {
   UpdateExamInput,
   UpsertProctorDeviceInput
 } from "@dcvp/shared";
+import type { IdentityPrivacyConsentInput } from "@dcvp/shared";
 import { PlatformStore } from "../services/platform-store.service.js";
 import { AuthService } from "../services/auth.service.js";
+import { CandidateExecutionRateLimiter } from "../services/login-rate-limiter.js";
 
 @Controller("/api/exams")
 export class ExamsController {
+  private readonly candidateExecutionRateLimiter = new CandidateExecutionRateLimiter();
+
   constructor(
     @Inject(PlatformStore) private readonly store: PlatformStore,
     @Inject(AuthService) private readonly auth: AuthService
@@ -68,7 +72,9 @@ export class ExamsController {
   }
 
   @Post("/invites/:inviteToken/run")
-  runCode(@Param("inviteToken") inviteToken: string, @Body() body: CodeRunInput) {
+  async runCode(@Req() request: Parameters<CandidateExecutionRateLimiter["consume"]>[0], @Param("inviteToken") inviteToken: string, @Body() body: CodeRunInput) {
+    await this.store.assertCandidateInviteExists(inviteToken);
+    this.assertCandidateExecutionRate(request, inviteToken);
     return this.store.runCandidateCode(inviteToken, body);
   }
 
@@ -78,7 +84,9 @@ export class ExamsController {
   }
 
   @Post("/invites/:inviteToken/submit")
-  submitCode(@Param("inviteToken") inviteToken: string, @Body() body: CodeSubmitInput) {
+  async submitCode(@Req() request: Parameters<CandidateExecutionRateLimiter["consume"]>[0], @Param("inviteToken") inviteToken: string, @Body() body: CodeSubmitInput) {
+    await this.store.assertCandidateInviteExists(inviteToken);
+    this.assertCandidateExecutionRate(request, inviteToken);
     return this.store.submitCandidateCode(inviteToken, body);
   }
 
@@ -98,8 +106,8 @@ export class ExamsController {
   }
 
   @Post("/invites/:inviteToken/identity-session")
-  createIdentitySession(@Param("inviteToken") inviteToken: string) {
-    return this.store.createCandidateIdentitySession(inviteToken);
+  createIdentitySession(@Param("inviteToken") inviteToken: string, @Body() body: IdentityPrivacyConsentInput) {
+    return this.store.createCandidateIdentitySession(inviteToken, body);
   }
 
   @Get("/:examId/report")
@@ -162,5 +170,12 @@ export class ExamsController {
     }
 
     return authorization.slice("Bearer ".length);
+  }
+
+  private assertCandidateExecutionRate(request: Parameters<CandidateExecutionRateLimiter["consume"]>[0], inviteToken: string): void {
+    const retryAfter = this.candidateExecutionRateLimiter.consume(request, inviteToken);
+    if (retryAfter !== null) {
+      throw new HttpException({ statusCode: HttpStatus.TOO_MANY_REQUESTS, message: "코드 실행 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", retryAfter }, HttpStatus.TOO_MANY_REQUESTS);
+    }
   }
 }

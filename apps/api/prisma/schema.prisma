@@ -147,15 +147,21 @@ model OrganizationInvitation {
 }
 
 model User {
-  id             String       @id
-  email          String       @unique
-  passwordHash   String
-  name           String
-  role           UserRole
-  organizationId String?
-  createdAt      DateTime     @default(now())
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  accessRequests OrganizationAccessRequest[]
+  id                     String       @id
+  email                  String       @unique
+  passwordHash           String
+  name                   String
+  role                   UserRole
+  organizationId         String?
+  failedLoginAttempts    Int          @default(0)
+  lockedUntil            DateTime?
+  passwordChangedAt      DateTime     @default(now())
+  passwordChangeRequired Boolean      @default(false)
+  privacyConsentVersion  String?
+  privacyConsentAcceptedAt DateTime?
+  createdAt              DateTime     @default(now())
+  organization           Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  accessRequests         OrganizationAccessRequest[]
 
   @@index([organizationId])
   @@index([role])
@@ -275,6 +281,8 @@ model Candidate {
   email       String
   status      CandidateStatus @default(INVITED)
   inviteToken String          @unique
+  identityPrivacyConsentVersion String?
+  identityPrivacyConsentAcceptedAt DateTime?
   createdAt   DateTime        @default(now())
   exam        Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
   submissions Submission[]
@@ -424,6 +432,8 @@ model IdentityVerification {
   livenessScore     Int                        @default(0)
   ocrNameMatched    Boolean                    @default(false)
   verificationChecks String[]                  @default([])
+  privacyConsentVersion String?
+  privacyConsentAcceptedAt DateTime?
   status            IdentityVerificationStatus
   verifiedAt        DateTime?
   createdAt         DateTime                   @default(now())

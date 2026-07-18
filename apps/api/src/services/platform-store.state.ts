@@ -192,6 +192,19 @@ export class PlatformStoreState extends PlatformStoreDatabase {
   }
 
   protected assertCandidateCanUseWorkspace(invite: CandidateInvite) {
+    const now = Date.now();
+    const startsAt = Date.parse(invite.exam.startAt);
+    const endsAt = Date.parse(invite.exam.endAt);
+    const examAvailable = invite.exam.status !== "ENDED"
+      && invite.exam.status !== "DELETED"
+      && Number.isFinite(startsAt)
+      && Number.isFinite(endsAt)
+      && now >= startsAt
+      && now < endsAt;
+    if (!examAvailable) {
+      throw new ForbiddenException("Exam is not available at this time");
+    }
+
     if (invite.candidate.status === "INVITED") {
       throw new ForbiddenException("Candidate entry confirmation is required");
     }

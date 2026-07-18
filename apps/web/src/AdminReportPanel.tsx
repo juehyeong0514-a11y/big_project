@@ -5,6 +5,7 @@ import type { CompetencyReport } from "@dcvp/shared";
 import { api } from "./api";
 import { Metric, Status } from "./components";
 import { proctorActionLabel, proctorEventLabel, proctorEventTone, riskLabel } from "./proctoring";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 
 type ExamReport = Awaited<ReturnType<typeof api.examReport>>;
 type CandidateReportItem = ExamReport["candidates"][number];
@@ -60,8 +61,8 @@ function CandidateReportCard({ item }: { item: CandidateReportItem }) {
     <article className="candidate-report">
       <div className="candidate-report-head">
         <div>
-          <strong>{item.candidate.name}</strong>
-          <span>{item.candidate.email}</span>
+          <strong>{maskDisplayName(item.candidate.name)}</strong>
+          <span>{maskEmailAddress(item.candidate.email)}</span>
         </div>
         <div className="candidate-score">
           <strong>{item.bestScore}</strong>

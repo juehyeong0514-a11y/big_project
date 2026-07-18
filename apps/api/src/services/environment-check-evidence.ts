@@ -1,7 +1,8 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ServiceUnavailableException } from "@nestjs/common";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { EnvironmentCheckSession } from "@dcvp/shared";
 import { createId } from "./platform-store.helpers.js";
+import { hasUsableConfigValue } from "./config-values.js";
 
 const ENVIRONMENT_CHECK_TTL_MS = 10 * 60 * 1000;
 
@@ -55,5 +56,12 @@ function safeTokenEquals(left: string, right: string) {
 }
 
 function environmentCheckSecret() {
-  return process.env.ENVIRONMENT_CHECK_SECRET ?? process.env.AUTH_SESSION_SECRET ?? "dcvp-local-environment-check-secret";
+  const configuredSecret = process.env.ENVIRONMENT_CHECK_SECRET ?? process.env.AUTH_SESSION_SECRET;
+  if (configuredSecret && (process.env.NODE_ENV !== "production" || (hasUsableConfigValue(configuredSecret) && Buffer.byteLength(configuredSecret) >= 32))) {
+    return configuredSecret;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new ServiceUnavailableException("운영 환경에는 32바이트 이상의 임의 ENVIRONMENT_CHECK_SECRET 설정이 필요합니다.");
+  }
+  return "dcvp-local-environment-check-secret";
 }

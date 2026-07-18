@@ -28,3 +28,150 @@
   padding: 10px 12px;
   resize: vertical;
 }
+
+.privacy-consent {
+  background: #f8fafc;
+  border: 1px solid #d7dee8;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.privacy-consent-check {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.privacy-consent-check input {
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 2px 0 0;
+  width: 18px;
+}
+
+.privacy-consent-check span,
+.privacy-consent-check small {
+  display: block;
+  line-break: strict;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.privacy-consent-check small {
+  color: #64748b;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.privacy-consent a,
+.login-footer a {
+  color: #174ea6;
+  font-weight: 700;
+}
+
+.login-footer {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 24px;
+  padding-top: 16px;
+  text-align: center;
+}
+
+.privacy-policy-page {
+  background: #f6f8fb;
+  min-height: 100dvh;
+  padding: 32px 20px;
+}
+
+.privacy-policy-panel {
+  background: #ffffff;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  line-break: strict;
+  margin: 0 auto;
+  max-width: 960px;
+  overflow-wrap: normal;
+  padding: 28px;
+  word-break: keep-all;
+}
+
+.privacy-policy-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.privacy-policy-copy {
+  border-bottom: 1px solid #e2e8f0;
+  margin: 28px 0;
+  padding-bottom: 24px;
+}
+
+.privacy-policy-copy h1 {
+  margin: 8px 0;
+}
+
+.privacy-policy-panel section {
+  border-bottom: 1px solid #edf1f5;
+  padding: 12px 0 20px;
+}
+
+.privacy-policy-panel section:last-child {
+  border-bottom: 0;
+}
+
+.privacy-policy-panel li,
+.privacy-policy-panel p {
+  color: #475569;
+  line-break: strict;
+  line-height: 1.7;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.privacy-contact-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.privacy-contact-list div {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) 1fr;
+  gap: 12px;
+}
+
+.privacy-contact-list dt {
+  color: #475569;
+  font-weight: 700;
+}
+
+.privacy-contact-list dd {
+  line-break: strict;
+  margin: 0;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+@media (max-width: 640px) {
+  .privacy-policy-page {
+    padding: 12px;
+  }
+
+  .privacy-policy-panel {
+    padding: 20px;
+  }
+
+  .privacy-policy-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .privacy-contact-list div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

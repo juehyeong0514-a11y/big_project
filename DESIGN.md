@@ -21,6 +21,7 @@ Operational Korean admin console for exam setup, live proctoring, candidate veri
 - Exam creation and editing use the same compact form fields and toggles so schedule and proctoring policies are edited consistently.
 - Organization application starts with two compact choice cards for creating or joining an organization; each card states its approval outcome before the user proceeds.
 - Organization managers see a compact code-and-invitation split panel: a copyable join code on the left and a registered-account email plus role selector on the right. The panel explicitly states that it registers an in-app invitation and does not send email. Received invitations use a single-row confirmation action.
+- Password creation and forced password-change forms use the shared policy hint below the new-password input. The forced-change state is a single-task panel and includes an explicit logout action.
 - Icon-only actions require `title`.
 - Status badges use semantic labels and color: normal, warning, danger, connected, disconnected.
 - Only the operator account list exposes a delete action. It uses the existing red danger treatment, asks for confirmation, and never appears for the signed-in operator's own row.

@@ -5,6 +5,55 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.service-footer {
+  align-items: center;
+  border-top: 1px solid #dce4ee;
+  color: #64748b;
+  display: flex;
+  font-size: 13px;
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 28px;
+  padding: 20px 0 4px;
+}
+
+.service-footer a {
+  color: #174ea6;
+  font-weight: 700;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.quick-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  min-height: 88px;
+  padding: 16px;
+  color: #17202a;
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.quick-card:hover,
+.quick-card:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px #dbeafe;
+  outline: none;
+}
+
+.quick-card span {
+  grid-column: 2;
+  color: #64748b;
+  font-size: 13px;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -324,6 +373,7 @@ h2 {
   gap: 22px;
   margin: 0 auto;
   max-width: 760px;
+  min-width: 0;
   padding: 28px;
   width: 100%;
 }
@@ -345,10 +395,14 @@ h2 {
 .candidate-copy {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .candidate-copy h1 {
   font-size: 30px;
+  line-break: strict;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }
 
 .candidate-copy p {
@@ -572,12 +626,16 @@ h2 {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 42px 1fr;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-width: 0;
   padding: 14px;
 }
 
 .identity-card input {
   grid-column: 1 / -1;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .identity-card strong,
@@ -670,6 +728,8 @@ h2 {
 .login-copy p {
   color: #64748b;
   line-height: 1.6;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
 .login-divider {
@@ -679,6 +739,18 @@ h2 {
 .login-form {
   display: grid;
   gap: 14px;
+}
+
+.password-policy-hint {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.login-demo-account span {
+  overflow-wrap: anywhere;
 }
 
 .form-error {
@@ -723,6 +795,10 @@ td span {
   color: #64748b;
   font-size: 13px;
   margin-top: 4px;
+}
+
+.table-duration-cell {
+  white-space: nowrap;
 }
 
 .status {
@@ -2073,7 +2149,81 @@ textarea {
   }
 }
 
+@media (max-width: 800px) {
+  .exam-table-wrap table {
+    min-width: 0;
+  }
+
+  .exam-table-wrap thead {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .exam-table-wrap tbody,
+  .exam-table-wrap tr,
+  .exam-table-wrap td {
+    display: block;
+    width: 100%;
+  }
+
+  .exam-table-wrap tr {
+    border-bottom: 1px solid #edf1f5;
+    padding: 12px 0;
+  }
+
+  .exam-table-wrap td {
+    align-items: start;
+    border-bottom: 0;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(64px, 76px) minmax(0, 1fr);
+    padding: 8px 0;
+  }
+
+  .exam-table-wrap td::before {
+    color: #64748b;
+    content: attr(data-label);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .exam-table-wrap .table-action-cell {
+    display: block;
+    padding-top: 12px;
+  }
+
+  .exam-table-wrap .table-action-cell::before {
+    content: none;
+  }
+
+  .exam-table-wrap .table-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  }
+
+  .exam-table-wrap .table-action-button {
+    justify-content: center;
+  }
+}
+
 @media (max-width: 640px) {
+  .login-page {
+    padding: 20px;
+  }
+
+  .login-panel {
+    padding: 24px;
+  }
+
   .app-shell {
     overflow-x: hidden;
   }
@@ -2115,7 +2265,7 @@ textarea {
   }
 
   .candidate-copy h1 {
-    font-size: 28px;
+    font-size: 26px;
   }
 
   .topbar,
@@ -2166,6 +2316,17 @@ textarea {
     width: 100%;
   }
 
+  .identity-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .identity-actions .primary-action,
+  .identity-actions .secondary-action {
+    width: 100%;
+  }
+
   .exam-page {
     padding: 14px;
   }
@@ -2199,4 +2360,16 @@ textarea {
   .item-actions {
     justify-content: flex-start;
   }
+
+  .service-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .service-footer span {
+    overflow-wrap: break-word;
+    word-break: keep-all;
+  }
+
 }

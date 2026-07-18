@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Save, Search, Trash2 } from "lucide-react";
+import { Pencil, Save, Search, Trash2, X } from "lucide-react";
 import type { AdminOrganizationOption, AuthSession, ManageableAdminRole, UpdateAdminUserInput, User, UserRole } from "@dcvp/shared";
+import { maskDisplayName, maskEmailAddress } from "./privacyMasking";
 
 const roleLabels: Record<"ADMIN" | ManageableAdminRole, string> = {
   ADMIN: "운영자",
@@ -40,6 +41,7 @@ export function UsersTable(props: {
   const [organizationFilter, setOrganizationFilter] = useState("ALL");
   const [roleFilter, setRoleFilter] = useState<AccountRoleFilter>("ALL");
   const [sortKey, setSortKey] = useState<AccountSortKey>("ORGANIZATION");
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const operator = props.session.user.role === "ADMIN";
   const filteredUsers = useMemo(
     () => sortUsers(filterUsers(props.users, { query, organizationFilter, roleFilter, organizationNameById: props.organizationNameById }), sortKey, props.organizationNameById),
@@ -48,7 +50,7 @@ export function UsersTable(props: {
 
   return (
     <section className="panel">
-      <div className="section-title"><div><h2>등록된 계정</h2><p>{operator ? "운영자는 전체 조직의 계정을 수정할 수 있습니다." : "조직 관리자는 자기 조직의 계정만 수정할 수 있습니다."}</p></div></div>
+      <div className="section-title"><div><h2>등록된 계정</h2><p>{operator ? "운영자는 전체 조직의 계정을 수정할 수 있습니다. 개인정보는 수정할 때만 전체 표시됩니다." : "조직 관리자는 자기 조직의 계정만 수정할 수 있습니다. 개인정보는 수정할 때만 전체 표시됩니다."}</p></div></div>
       <div className="account-list-controls" aria-label="등록된 계정 정렬과 필터">
         <label className="search account-search">
           <Search size={16} />
@@ -85,7 +87,7 @@ export function UsersTable(props: {
         <table>
           <thead><tr><th>이름</th><th>이메일</th><th>권한</th><th>조직</th><th>생성일</th><th>저장</th></tr></thead>
           <tbody>
-            {filteredUsers.map((user) => <UserEditRow key={user.id} user={user} {...props} />)}
+            {filteredUsers.map((user) => <UserEditRow key={user.id} user={user} editing={editingUserId === user.id} beginEditing={() => { props.updateEdit(user, {}); setEditingUserId(user.id); }} cancelEditing={() => setEditingUserId(null)} {...props} />)}
             {filteredUsers.length === 0 ? <tr><td colSpan={6}>조건에 맞는 계정이 없습니다.</td></tr> : null}
           </tbody>
         </table>
@@ -118,18 +120,21 @@ function UserEditRow(props: {
   readonly deleteUser: (user: User) => void;
   readonly isSaving: boolean;
   readonly isDeleting: boolean;
+  readonly editing: boolean;
+  readonly beginEditing: () => void;
+  readonly cancelEditing: () => void;
 }) {
   const edit = props.edits[props.user.id] ?? userEditState(props.user);
   const operator = props.session.user.role === "ADMIN";
   const organizationId = edit.organizationId ?? props.user.organizationId ?? "";
   return (
     <tr>
-      <td><input value={edit.name} onChange={(event) => props.updateEdit(props.user, { name: event.target.value })} /></td>
-      <td><input value={edit.email} onChange={(event) => props.updateEdit(props.user, { email: event.target.value })} type="email" /></td>
-      <td><RoleSelect value={edit.role} onChange={(role) => props.updateEdit(props.user, { role })} operator={operator} /></td>
-      <td>{operator ? <OrganizationSelect value={organizationId} organizations={props.organizations} onChange={(organizationId) => props.updateEdit(props.user, { organizationId })} /> : props.organizationNameById[organizationId] ?? organizationId}</td>
+      <td>{props.editing ? <input value={edit.name} onChange={(event) => props.updateEdit(props.user, { name: event.target.value })} /> : maskDisplayName(props.user.name)}</td>
+      <td>{props.editing ? <input value={edit.email} onChange={(event) => props.updateEdit(props.user, { email: event.target.value })} type="email" /> : maskEmailAddress(props.user.email)}</td>
+      <td>{props.editing ? <RoleSelect value={edit.role} onChange={(role) => props.updateEdit(props.user, { role })} operator={operator} /> : roleLabel(props.user.role)}</td>
+      <td>{props.editing && operator ? <OrganizationSelect value={organizationId} organizations={props.organizations} onChange={(organizationId) => props.updateEdit(props.user, { organizationId })} /> : props.organizationNameById[organizationId] ?? organizationId}</td>
       <td>{new Date(props.user.createdAt).toLocaleString("ko-KR")}</td>
-      <td><div className="account-row-actions"><button className="primary-action compact-action" type="button" onClick={() => props.saveUser(props.user)} disabled={props.isSaving || props.isDeleting}><Save size={16} />저장</button>{operator && props.session.user.id !== props.user.id ? <button className="ghost-action compact-action danger-action" type="button" onClick={() => { if (window.confirm(`'${props.user.name}' 계정을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) props.deleteUser(props.user); }} disabled={props.isDeleting || props.isSaving}><Trash2 size={16} />삭제</button> : null}</div></td>
+      <td><div className="account-row-actions">{props.editing ? <><button className="primary-action compact-action" type="button" onClick={() => props.saveUser(props.user)} disabled={props.isSaving || props.isDeleting}><Save size={16} />저장</button><button className="ghost-action compact-action" type="button" onClick={props.cancelEditing} disabled={props.isSaving || props.isDeleting}><X size={16} />취소</button></> : <button className="ghost-action compact-action" type="button" onClick={props.beginEditing} disabled={props.isSaving || props.isDeleting}><Pencil size={16} />수정</button>}{operator && props.session.user.id !== props.user.id ? <button className="ghost-action compact-action danger-action" type="button" onClick={() => { if (window.confirm(`'${maskDisplayName(props.user.name)}' 계정을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) props.deleteUser(props.user); }} disabled={props.isDeleting || props.isSaving}><Trash2 size={16} />삭제</button> : null}</div></td>
     </tr>
   );
 }

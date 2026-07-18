@@ -3,7 +3,7 @@ export function providerMessageId(body: unknown) {
     return undefined;
   }
   const id = body["id"];
-  return typeof id === "string" && id.trim() ? id : undefined;
+  return typeof id === "string" && id.trim() ? id.trim().slice(0, 256) : undefined;
 }
 
 export function providerErrorMessage(body: unknown) {
